@@ -55,6 +55,17 @@ jobs:
       - name: Install ARMhf Cross-Compilation Toolchain & Dependencies
         run: |
           sudo dpkg --add-architecture armhf
+          
+          # Configure multi-arch APT sources: x86 from archive.ubuntu.com, armhf from ports.ubuntu.com
+          sudo sed -i -e 's/deb http/deb [arch=amd64,i386] http/g' /etc/apt/sources.list
+          sudo sed -i -e 's/deb https/deb [arch=amd64,i386] https/g' /etc/apt/sources.list
+          
+          cat << 'PORTS_EOF' | sudo tee /etc/apt/sources.list.d/ports.list
+deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ jammy main restricted universe multiverse
+deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ jammy-updates main restricted universe multiverse
+deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ jammy-security main restricted universe multiverse
+PORTS_EOF
+
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             gcc-arm-linux-gnueabihf \
