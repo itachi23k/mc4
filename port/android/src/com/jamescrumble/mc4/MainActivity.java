@@ -1,5 +1,7 @@
 package com.jamescrumble.mc4;
 
+import java.io.File;
+
 import android.Manifest;
 import android.net.wifi.WifiManager;
 import android.app.Activity;

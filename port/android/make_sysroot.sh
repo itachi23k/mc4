@@ -6,7 +6,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="$REPO/android/build/sysroot"
-LIBDIRS=("$REPO/build/sdl-arm/lib" /lib/arm-linux-gnueabihf /usr/lib/arm-linux-gnueabihf /usr/arm-linux-gnueabihf/lib)
+LIBDIRS=("$REPO/build/sdl-arm/lib" /lib/arm-linux-gnueabihf /usr/lib/arm-linux-gnueabihf /usr/lib/arm-linux-gnueabihf/pulseaudio /usr/arm-linux-gnueabihf/lib)
 STRIP=arm-linux-gnueabihf-strip
 
 rm -rf "$OUT"

@@ -88,6 +88,7 @@ jobs:
             unzip \
             file \
             libbsd-dev:armhf \
+            libpulse-dev:armhf \
             libsdl2-dev:armhf \
             zlib1g-dev:armhf \
             libzip-dev:armhf \
