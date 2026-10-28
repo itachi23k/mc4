@@ -1,0 +1,684 @@
+[gl] EGL config: rgba 8880 depth 24 stencil 8
+[wrapper] profile folder saves
+[gl] GL_RENDERER Adreno (TM) 730, GL_VERSION OpenGL ES 3.2 V@0615.73 (GIT@8f5499ec14, Ie6ef1a0a80, 1689341690) (Date:07/14/23)
+[gl] GL_EXTENSIONS GL_OES_EGL_image GL_OES_EGL_image_external GL_OES_EGL_sync GL_OES_vertex_half_float GL_OES_framebuffer_object GL_OES_rgb8_rgba8 GL_OES_compressed_ETC1_RGB8_texture GL_AMD_compressed_ATC_texture GL_KHR_texture_compression_astc_ldr GL_KHR_texture_compression_astc_hdr GL_OES_texture_compression_astc GL_OES_texture_npot GL_EXT_texture_filter_anisotropic GL_EXT_texture_format_BGRA8888 GL_EXT_read_format_bgra GL_OES_texture_3D GL_EXT_color_buffer_float GL_EXT_color_buffer_half_float GL_QCOM_alpha_test GL_OES_depth24 GL_OES_packed_depth_stencil GL_OES_depth_texture GL_OES_depth_texture_cube_map GL_EXT_sRGB GL_OES_texture_float GL_OES_texture_float_linear GL_OES_texture_half_float GL_OES_texture_half_float_linear GL_EXT_texture_type_2_10_10_10_REV GL_EXT_texture_sRGB_decode GL_EXT_texture_format_sRGB_override GL_OES_element_index_uint GL_EXT_copy_image GL_EXT_geometry_shader GL_EXT_tessellation_shader GL_OES_texture_stencil8 GL_EXT_shader_io_blocks GL_OES_shader_image_atomic GL_OES_sample_variables GL_EXT_texture_border_clamp GL_EXT_EGL_image_external_wrap_modes GL_EXT_multisampled_render_to_texture GL_EXT_multisampled_render_to_texture2 GL_OES_shader_multisample_interpolation GL_EXT_texture_cube_map_array GL_EXT_draw_buffers_indexed GL_EXT_gpu_shader5 GL_EXT_robustness GL_EXT_texture_buffer GL_EXT_shader_framebuffer_fetch GL_ARM_shader_framebuffer_fetch_depth_stencil GL_OES_texture_storage_multisample_2d_array GL_OES_sample_shading GL_OES_get_program_binary GL_EXT_debug_label GL_KHR_blend_equation_advanced GL_KHR_blend_equation_advanced_coherent GL_QCOM_tiled_rendering GL_ANDROID_extension_pack_es31a GL_EXT_primitive_bounding_box GL_OES_standard_derivatives GL_OES_vertex_array_object GL_EXT_disjoint_timer_query GL_KHR_debug GL_EXT_YUV_target GL_EXT_sRGB_write_control GL_EXT_texture_norm16 GL_EXT_discard_framebuffer GL_OES_surfaceless_context GL_OVR_multiview GL_OVR_multiview2 GL_EXT_texture_sRGB_R8 GL_KHR_no_error GL_EXT_debug_marker GL_OES_EGL_image_external_essl3 GL_OVR_multiview_multisampled_render_to_texture GL_EXT_buffer_storage GL_EXT_external_buffer GL_EXT_blit_framebuffer_params GL_EXT_clip_cull_distance GL_EXT_protected_textures GL_EXT_shader_non_constant_global_initializers GL_QCOM_texture_foveated GL_QCOM_texture_foveated2 GL_QCOM_texture_foveated_subsampled_layout GL_QCOM_shader_framebuffer_fetch_noncoherent GL_QCOM_shader_framebuffer_fetch_rate GL_EXT_memory_object GL_EXT_memory_object_fd GL_EXT_EGL_image_array GL_NV_shader_noperspective_interpolation GL_KHR_robust_buffer_access_behavior GL_EXT_EGL_image_storage GL_EXT_blend_func_extended GL_EXT_clip_control GL_OES_texture_view GL_EXT_fragment_invocation_density GL_QCOM_motion_estimation GL_QCOM_validate_shader_binary GL_QCOM_YUV_texture_gather GL_QCOM_shading_rate GL_QCOM_frame_extrapolation GL_IMG_texture_filter_cubic GL_QCOM_render_shared_exponent 
+[wrapper] qemu pinned to cpu mask 0xc0
+[wrapper] [/system/bin/taskset, c0, /data/app/~~f4zYpIewZr9WG9eLzLT9hg==/com.jamescrumble.mc4-h7DaJUNi_3u6Tj4PtSGGCg==/lib/arm64/libqemu.so, -cpu, cortex-a15, -B, 0x100000000, -L, /data/user/0/com.jamescrumble.mc4/files/sysroot, /data/user/0/com.jamescrumble.mc4/files/bin/mc4, /data/user/0/com.jamescrumble.mc4/files/game]
+[perf] perf hint: off
+[audio] track buffer 14144 bytes (80 ms, min 14144), pipe 4096 bytes
+TRACE: Modern Combat 4 port v0.4
+TRACE: writable storage: /data/user/0/com.jamescrumble.mc4/files/game/saves (MC4_SAVEDIR)
+TRACE: writable storage: created /data/user/0/com.jamescrumble.mc4/files/game/saves/home
+TRACE: writable storage: created /data/user/0/com.jamescrumble.mc4/files/game/saves/cache
+TRACE: native library found: /data/user/0/com.jamescrumble.mc4/files/game/lib/armeabi-v7a/libModernCombat4.so (24855648 bytes)
+TRACE: resource directory: /data/user/0/com.jamescrumble.mc4/files/game/files
+TRACE: gl bridge: connected (/data/user/0/com.jamescrumble.mc4/files/gl_cmd.pipe, /data/user/0/com.jamescrumble.mc4/files/gl_reply.pipe), 2 frame(s) in flight, command pipe 1024 KB
+TRACE: GLES1 table: 50/190 imports resolved from (none)
+TRACE: drawable 1514x720
+TRACE: viewport scale: identity (panel 1514x720, logical 1514x720)
+TRACE: gl bridge: host GL string 0x1f02 = OpenGL ES 3.2 V@0615.73 (GIT@8f5499ec14, Ie6ef1a0a80, 1689341690) (Date:07/14/23)
+TRACE: gl bridge: host GL string 0x1f01 = Adreno (TM) 730
+TRACE: GL_VERSION=OpenGL ES 3.2 V@0615.73 (GIT@8f5499ec14, Ie6ef1a0a80, 1689341690) (Date:07/14/23) | GL_RENDERER=Adreno (TM) 730
+Loading 'libModernCombat4.so'...
+Linking libAndroid.so...
+TRACE: module loaded
+TRACE: DRM: the four GDRM lock words point at loader storage
+TRACE: running 505 static initializers
+TRACE: init_array[0/505] -> +0x004a6100
+TRACE: init_array[1/505] -> +0x004a6148
+TRACE: init_array[2/505] -> +0x004a6194
+TRACE: init_array[3/505] -> +0x004a6260
+TRACE: init_array[4/505] -> +0x004a6348
+TRACE: init_array[5/505] -> +0x004a6394
+TRACE: init_array[6/505] -> +0x004a64a8
+TRACE: init_array[7/505] -> +0x004a67c4
+TRACE: init_array[8/505] -> +0x004a69f8
+TRACE: init_array[9/505] -> +0x004a6a44
+TRACE: init_array[10/505] -> +0x004a6b84
+TRACE: init_array[11/505] -> +0x004a6fc8
+TRACE: init_array[12/505] -> +0x004a7018
+TRACE: init_array[13/505] -> +0x004a7470
+TRACE: init_array[14/505] -> +0x004a78b4
+TRACE: init_array[15/505] -> +0x004a7dbc
+TRACE: init_array[16/505] -> +0x004a81f4
+TRACE: init_array[17/505] -> +0x004a862c
+TRACE: init_array[18/505] -> +0x004a8a64
+TRACE: init_array[19/505] -> +0x004a8ad4
+TRACE: init_array[20/505] -> +0x004a8f18
+TRACE: init_array[21/505] -> +0x004a9678
+TRACE: init_array[22/505] -> +0x004a9aec
+TRACE: init_array[23/505] -> +0x004a9bc8
+TRACE: init_array[24/505] -> +0x004a9c18
+TRACE: init_array[25/505] -> +0x004aa050
+TRACE: init_array[26/505] -> +0x004aa830
+TRACE: init_array[27/505] -> +0x004ac128
+TRACE: init_array[28/505] -> +0x004ac590
+TRACE: init_array[29/505] -> +0x004acac4
+TRACE: init_array[30/505] -> +0x004acb10
+TRACE: init_array[31/505] -> +0x004acb74
+TRACE: init_array[32/505] -> +0x004acbc0
+TRACE: init_array[33/505] -> +0x004acff8
+TRACE: init_array[34/505] -> +0x004ad4a4
+TRACE: init_array[35/505] -> +0x004ad8dc
+TRACE: init_array[36/505] -> +0x004ad970
+TRACE: init_array[37/505] -> +0x004ade90
+TRACE: init_array[38/505] -> +0x004adedc
+TRACE: init_array[39/505] -> +0x004adff0
+TRACE: init_array[40/505] -> +0x004ae24c
+TRACE: init_array[41/505] -> +0x004ae320
+TRACE: init_array[42/505] -> +0x004ae5a4
+TRACE: init_array[43/505] -> +0x004ae7dc
+TRACE: init_array[44/505] -> +0x004ae8bc
+TRACE: init_array[45/505] -> +0x004ae9d0
+TRACE: init_array[46/505] -> +0x004aeab0
+TRACE: init_array[47/505] -> +0x004aecfc
+TRACE: init_array[48/505] -> +0x004aee4c
+TRACE: init_array[49/505] -> +0x004af0b4
+TRACE: init_array[50/505] -> +0x004af198
+TRACE: init_array[51/505] -> +0x004af2ac
+TRACE: init_array[52/505] -> +0x004af3e8
+TRACE: init_array[53/505] -> +0x004af4fc
+TRACE: init_array[54/505] -> +0x004af5e0
+TRACE: init_array[55/505] -> +0x004af6f4
+TRACE: init_array[56/505] -> +0x004af904
+TRACE: init_array[57/505] -> +0x004afa98
+TRACE: init_array[58/505] -> +0x004afbec
+TRACE: init_array[59/505] -> +0x004afe28
+TRACE: init_array[60/505] -> +0x004aff0c
+TRACE: init_array[61/505] -> +0x004afff0
+TRACE: init_array[62/505] -> +0x004b016c
+TRACE: init_array[63/505] -> +0x004b03c0
+TRACE: init_array[64/505] -> +0x004b0584
+TRACE: init_array[65/505] -> +0x004b05b0
+TRACE: init_array[66/505] -> +0x004b06b0
+TRACE: init_array[67/505] -> +0x004b0754
+TRACE: init_array[68/505] -> +0x004b07cc
+TRACE: init_array[69/505] -> +0x004b0958
+TRACE: init_array[70/505] -> +0x004b0a24
+TRACE: init_array[71/505] -> +0x004b0af8
+TRACE: init_array[72/505] -> +0x004b0c4c
+TRACE: init_array[73/505] -> +0x004b0d28
+TRACE: init_array[74/505] -> +0x004b0da0
+TRACE: init_array[75/505] -> +0x004b0f90
+TRACE: init_array[76/505] -> +0x004b10ac
+TRACE: init_array[77/505] -> +0x004b1180
+TRACE: init_array[78/505] -> +0x004b1254
+TRACE: init_array[79/505] -> +0x004b12bc
+TRACE: init_array[80/505] -> +0x004b13d0
+TRACE: init_array[81/505] -> +0x004b14f4
+TRACE: init_array[82/505] -> +0x004b15cc
+TRACE: init_array[83/505] -> +0x004b17ac
+TRACE: init_array[84/505] -> +0x004b17e0
+TRACE: init_array[85/505] -> +0x004b18c4
+TRACE: init_array[86/505] -> +0x004b19bc
+TRACE: init_array[87/505] -> +0x004b1c7c
+TRACE: init_array[88/505] -> +0x004b1d50
+TRACE: init_array[89/505] -> +0x004b1e38
+TRACE: init_array[90/505] -> +0x004b1f98
+TRACE: init_array[91/505] -> +0x004b2118
+TRACE: init_array[92/505] -> +0x004b21e4
+TRACE: init_array[93/505] -> +0x004b22cc
+TRACE: init_array[94/505] -> +0x004b23bc
+TRACE: init_array[95/505] -> +0x004b2864
+TRACE: init_array[96/505] -> +0x004b2904
+TRACE: init_array[97/505] -> +0x004b292c
+TRACE: init_array[98/505] -> +0x004b2ab0
+TRACE: init_array[99/505] -> +0x004b2b28
+TRACE: init_array[100/505] -> +0x004b2c3c
+TRACE: init_array[101/505] -> +0x004b2df0
+TRACE: init_array[102/505] -> +0x004b2eac
+TRACE: init_array[103/505] -> +0x004b2f78
+TRACE: init_array[104/505] -> +0x004b2ff0
+TRACE: init_array[105/505] -> +0x004b30bc
+TRACE: init_array[106/505] -> +0x004b31ac
+TRACE: init_array[107/505] -> +0x004b3320
+TRACE: init_array[108/505] -> +0x004b3354
+TRACE: init_array[109/505] -> +0x004b345c
+TRACE: init_array[110/505] -> +0x004b3530
+TRACE: init_array[111/505] -> +0x004b36b8
+TRACE: init_array[112/505] -> +0x004b378c
+TRACE: init_array[113/505] -> +0x004b3818
+TRACE: init_array[114/505] -> +0x004b3830
+TRACE: init_array[115/505] -> +0x004b3984
+TRACE: init_array[116/505] -> +0x004b39f0
+TRACE: init_array[117/505] -> +0x004b3ab0
+TRACE: init_array[118/505] -> +0x004b3b90
+TRACE: init_array[119/505] -> +0x004b3ba8
+TRACE: init_array[120/505] -> +0x004b3c10
+TRACE: init_array[121/505] -> +0x004b3c78
+TRACE: init_array[122/505] -> +0x004b3cf4
+TRACE: init_array[123/505] -> +0x004b3da8
+TRACE: init_array[124/505] -> +0x004b3dc0
+TRACE: init_array[125/505] -> +0x004b3ea8
+TRACE: init_array[126/505] -> +0x004b3f5c
+TRACE: init_array[127/505] -> +0x004b4038
+TRACE: init_array[128/505] -> +0x004b4064
+TRACE: init_array[129/505] -> +0x004b4108
+TRACE: init_array[130/505] -> +0x004b4200
+TRACE: init_array[131/505] -> +0x004b42b4
+TRACE: init_array[132/505] -> +0x004b4318
+TRACE: init_array[133/505] -> +0x004b448c
+TRACE: init_array[134/505] -> +0x004b4570
+TRACE: init_array[135/505] -> +0x004b4610
+TRACE: init_array[136/505] -> +0x004b4934
+TRACE: init_array[137/505] -> +0x004b49a8
+TRACE: init_array[138/505] -> +0x004b4a9c
+TRACE: init_array[139/505] -> +0x004b4b84
+TRACE: init_array[140/505] -> +0x004b4c74
+TRACE: init_array[141/505] -> +0x004b4d5c
+TRACE: init_array[142/505] -> +0x004b4e44
+TRACE: init_array[143/505] -> +0x004b4f28
+TRACE: init_array[144/505] -> +0x004b5014
+TRACE: init_array[145/505] -> +0x004b5118
+TRACE: init_array[146/505] -> +0x004b51ec
+TRACE: init_array[147/505] -> +0x004b5534
+TRACE: init_array[148/505] -> +0x004b5538
+TRACE: init_array[149/505] -> +0x004b561c
+TRACE: init_array[150/505] -> +0x004b56e4
+TRACE: init_array[151/505] -> +0x004b5870
+TRACE: init_array[152/505] -> +0x004b5920
+TRACE: init_array[153/505] -> +0x004b59ec
+TRACE: init_array[154/505] -> +0x004b5bcc
+TRACE: init_array[155/505] -> +0x004b5d74
+TRACE: init_array[156/505] -> +0x004b5ed4
+TRACE: init_array[157/505] -> +0x004b6054
+TRACE: init_array[158/505] -> +0x004b613c
+TRACE: init_array[159/505] -> +0x004b61f8
+TRACE: init_array[160/505] -> +0x004b6234
+TRACE: init_array[161/505] -> +0x004b6308
+TRACE: init_array[162/505] -> +0x004b6370
+TRACE: init_array[163/505] -> +0x004b63d4
+TRACE: init_array[164/505] -> +0x004b6438
+TRACE: init_array[165/505] -> +0x004b651c
+TRACE: init_array[166/505] -> +0x004b6544
+TRACE: init_array[167/505] -> +0x004b6610
+TRACE: init_array[168/505] -> +0x004b6674
+TRACE: init_array[169/505] -> +0x004b671c
+TRACE: init_array[170/505] -> +0x004b6848
+TRACE: init_array[171/505] -> +0x004b692c
+TRACE: init_array[172/505] -> +0x004b6a08
+TRACE: init_array[173/505] -> +0x004b6bb4
+TRACE: init_array[174/505] -> +0x004b6ca4
+TRACE: init_array[175/505] -> +0x004b6d80
+TRACE: init_array[176/505] -> +0x004b6e68
+TRACE: init_array[177/505] -> +0x004b6e94
+TRACE: init_array[178/505] -> +0x004b6f9c
+TRACE: init_array[179/505] -> +0x004b7064
+TRACE: init_array[180/505] -> +0x004b7110
+TRACE: init_array[181/505] -> +0x004b7774
+TRACE: init_array[182/505] -> +0x004b779c
+TRACE: init_array[183/505] -> +0x004b77c4
+TRACE: init_array[184/505] -> +0x004b7934
+TRACE: init_array[185/505] -> +0x004b7a84
+TRACE: init_array[186/505] -> +0x004b7ba0
+TRACE: init_array[187/505] -> +0x004b7c84
+TRACE: init_array[188/505] -> +0x004b7cec
+TRACE: init_array[189/505] -> +0x004b7d04
+TRACE: init_array[190/505] -> +0x004b7f38
+TRACE: init_array[191/505] -> +0x004b7f50
+TRACE: init_array[192/505] -> +0x004b7f68
+TRACE: init_array[193/505] -> +0x004b7f80
+TRACE: init_array[194/505] -> +0x004b7f98
+TRACE: init_array[195/505] -> +0x004b7fb0
+TRACE: init_array[196/505] -> +0x004b8108
+TRACE: init_array[197/505] -> +0x004b8120
+TRACE: init_array[198/505] -> +0x004b81d8
+TRACE: init_array[199/505] -> +0x004b81f0
+TRACE: init_array[200/505] -> +0x004b8380
+TRACE: init_array[201/505] -> +0x004b83a8
+TRACE: init_array[202/505] -> +0x004b83d0
+TRACE: init_array[203/505] -> +0x004b83e8
+TRACE: init_array[204/505] -> +0x004b86a8
+TRACE: init_array[205/505] -> +0x004b896c
+TRACE: init_array[206/505] -> +0x004b89ac
+TRACE: init_array[207/505] -> +0x004b8a60
+TRACE: init_array[208/505] -> +0x004b8f90
+TRACE: init_array[209/505] -> +0x004b9170
+TRACE: init_array[210/505] -> +0x004b96a0
+TRACE: init_array[211/505] -> +0x004b9e44
+TRACE: init_array[212/505] -> +0x004b9efc
+TRACE: init_array[213/505] -> +0x004ba05c
+TRACE: init_array[214/505] -> +0x004ba1d0
+TRACE: init_array[215/505] -> +0x004ba6f0
+TRACE: init_array[216/505] -> +0x004baa0c
+TRACE: init_array[217/505] -> +0x004baf3c
+TRACE: init_array[218/505] -> +0x004bb44c
+TRACE: init_array[219/505] -> +0x004bb538
+TRACE: init_array[220/505] -> +0x004bb624
+TRACE: init_array[221/505] -> +0x004bb640
+TRACE: init_array[222/505] -> +0x004bb664
+TRACE: init_array[223/505] -> +0x004bb714
+TRACE: init_array[224/505] -> +0x004bb8ac
+TRACE: init_array[225/505] -> +0x004bb964
+TRACE: init_array[226/505] -> +0x004bba4c
+TRACE: init_array[227/505] -> +0x004bbb2c
+TRACE: init_array[228/505] -> +0x004bbc14
+TRACE: init_array[229/505] -> +0x004bbd7c
+TRACE: init_array[230/505] -> +0x004bbe54
+TRACE: init_array[231/505] -> +0x004bbec8
+TRACE: init_array[232/505] -> +0x004bc120
+TRACE: init_array[233/505] -> +0x004bc23c
+TRACE: init_array[234/505] -> +0x004bc46c
+TRACE: init_array[235/505] -> +0x004bc71c
+TRACE: init_array[236/505] -> +0x004bc804
+TRACE: init_array[237/505] -> +0x004bcb2c
+TRACE: init_array[238/505] -> +0x004bcc18
+TRACE: init_array[239/505] -> +0x004bcd04
+TRACE: init_array[240/505] -> +0x004bce00
+TRACE: init_array[241/505] -> +0x004bcef8
+TRACE: init_array[242/505] -> +0x004bcfe0
+TRACE: init_array[243/505] -> +0x004bd0d8
+TRACE: init_array[244/505] -> +0x004bd18c
+TRACE: init_array[245/505] -> +0x004bd274
+TRACE: init_array[246/505] -> +0x004bd334
+TRACE: init_array[247/505] -> +0x004bd444
+TRACE: init_array[248/505] -> +0x004bd528
+TRACE: init_array[249/505] -> +0x004bd610
+TRACE: init_array[250/505] -> +0x004bd6f4
+TRACE: init_array[251/505] -> +0x004bd884
+TRACE: init_array[252/505] -> +0x004bd98c
+TRACE: init_array[253/505] -> +0x004bda98
+TRACE: init_array[254/505] -> +0x004bdbb4
+TRACE: init_array[255/505] -> +0x004bde60
+TRACE: init_array[256/505] -> +0x004bdfa0
+TRACE: init_array[257/505] -> +0x004be07c
+TRACE: init_array[258/505] -> +0x004be248
+TRACE: init_array[259/505] -> +0x004be330
+TRACE: init_array[260/505] -> +0x004be4e8
+TRACE: init_array[261/505] -> +0x004be5e4
+TRACE: init_array[262/505] -> +0x004be6fc
+TRACE: init_array[263/505] -> +0x004be7e4
+TRACE: init_array[264/505] -> +0x004be8cc
+TRACE: init_array[265/505] -> +0x004beb10
+TRACE: init_array[266/505] -> +0x004bebf8
+TRACE: init_array[267/505] -> +0x004becdc
+TRACE: init_array[268/505] -> +0x004bee84
+TRACE: init_array[269/505] -> +0x004bef9c
+TRACE: init_array[270/505] -> +0x004bf0a8
+TRACE: init_array[271/505] -> +0x004bf18c
+TRACE: init_array[272/505] -> +0x004bf338
+TRACE: init_array[273/505] -> +0x004bf4cc
+TRACE: init_array[274/505] -> +0x004bf674
+TRACE: init_array[275/505] -> +0x004bf77c
+TRACE: init_array[276/505] -> +0x004bf860
+TRACE: init_array[277/505] -> +0x004bf944
+TRACE: init_array[278/505] -> +0x004bfa2c
+TRACE: init_array[279/505] -> +0x004bfae4
+TRACE: init_array[280/505] -> +0x004bfb98
+TRACE: init_array[281/505] -> +0x004bfc4c
+TRACE: init_array[282/505] -> +0x004bff94
+TRACE: init_array[283/505] -> +0x004c00fc
+TRACE: init_array[284/505] -> +0x004c0128
+TRACE: init_array[285/505] -> +0x004c0188
+TRACE: init_array[286/505] -> +0x004c01e0
+TRACE: init_array[287/505] -> +0x004c0244
+TRACE: init_array[288/505] -> +0x004c02a8
+TRACE: init_array[289/505] -> +0x004c038c
+TRACE: init_array[290/505] -> +0x004c043c
+TRACE: init_array[291/505] -> +0x004c04ec
+TRACE: init_array[292/505] -> +0x004c063c
+TRACE: init_array[293/505] -> +0x004c069c
+TRACE: init_array[294/505] -> +0x004c0f78
+TRACE: init_array[295/505] -> +0x004c0fd8
+TRACE: init_array[296/505] -> +0x004c1088
+TRACE: init_array[297/505] -> +0x004c1478
+TRACE: init_array[298/505] -> +0x004c14d8
+TRACE: init_array[299/505] -> +0x004c1654
+TRACE: init_array[300/505] -> +0x004c1d90
+TRACE: init_array[301/505] -> +0x004c1e84
+TRACE: init_array[302/505] -> +0x004c1f64
+TRACE: init_array[303/505] -> +0x004c2234
+TRACE: init_array[304/505] -> +0x004c22d4
+TRACE: init_array[305/505] -> +0x004c2394
+TRACE: init_array[306/505] -> +0x004c2444
+TRACE: init_array[307/505] -> +0x004c2504
+TRACE: init_array[308/505] -> +0x004c265c
+TRACE: init_array[309/505] -> +0x004c26bc
+TRACE: init_array[310/505] -> +0x004c270c
+TRACE: init_array[311/505] -> +0x004c275c
+TRACE: init_array[312/505] -> +0x004c280c
+TRACE: init_array[313/505] -> +0x004c28bc
+TRACE: init_array[314/505] -> +0x004c2a40
+TRACE: init_array[315/505] -> +0x004c2c64
+TRACE: init_array[316/505] -> +0x004c2cb8
+TRACE: init_array[317/505] -> +0x004c2d6c
+TRACE: init_array[318/505] -> +0x004c2da8
+TRACE: init_array[319/505] -> +0x004c2e64
+TRACE: init_array[320/505] -> +0x004c2ec4
+TRACE: init_array[321/505] -> +0x004c3014
+TRACE: init_array[322/505] -> +0x004c30c8
+TRACE: init_array[323/505] -> +0x004c323c
+TRACE: init_array[324/505] -> +0x004c3304
+TRACE: init_array[325/505] -> +0x004c3648
+TRACE: init_array[326/505] -> +0x004c37ac
+TRACE: init_array[327/505] -> +0x004c37c4
+TRACE: init_array[328/505] -> +0x004c3874
+TRACE: init_array[329/505] -> +0x004c3970
+TRACE: init_array[330/505] -> +0x004c3a20
+TRACE: init_array[331/505] -> +0x004c3ad0
+TRACE: init_array[332/505] -> +0x004c3b30
+TRACE: init_array[333/505] -> +0x004c3bdc
+TRACE: init_array[334/505] -> +0x004c3c3c
+TRACE: init_array[335/505] -> +0x004c3c54
+TRACE: init_array[336/505] -> +0x004c3df8
+TRACE: init_array[337/505] -> +0x004c3f60
+TRACE: init_array[338/505] -> +0x004c4074
+TRACE: init_array[339/505] -> +0x004c4218
+TRACE: init_array[340/505] -> +0x004c55dc
+TRACE: init_array[341/505] -> +0x004c5660
+TRACE: init_array[342/505] -> +0x004c572c
+TRACE: init_array[343/505] -> +0x004c58a4
+TRACE: init_array[344/505] -> +0x004c5a48
+TRACE: init_array[345/505] -> +0x004c5bf4
+TRACE: init_array[346/505] -> +0x004c5da0
+TRACE: init_array[347/505] -> +0x004c5e68
+TRACE: init_array[348/505] -> +0x004c603c
+TRACE: init_array[349/505] -> +0x004c61c0
+TRACE: init_array[350/505] -> +0x004c62a4
+TRACE: init_array[351/505] -> +0x004c630c
+TRACE: init_array[352/505] -> +0x004c642c
+TRACE: init_array[353/505] -> +0x004c65d0
+TRACE: init_array[354/505] -> +0x004c66b4
+TRACE: init_array[355/505] -> +0x004c6868
+TRACE: init_array[356/505] -> +0x004c6a0c
+TRACE: init_array[357/505] -> +0x004c6c08
+TRACE: init_array[358/505] -> +0x004c6d8c
+TRACE: init_array[359/505] -> +0x004c6f38
+TRACE: init_array[360/505] -> +0x004c70dc
+TRACE: init_array[361/505] -> +0x004c71c0
+TRACE: init_array[362/505] -> +0x004c7364
+TRACE: init_array[363/505] -> +0x004c747c
+TRACE: init_array[364/505] -> +0x004c7600
+TRACE: init_array[365/505] -> +0x004c7830
+TRACE: init_array[366/505] -> +0x004c7938
+TRACE: init_array[367/505] -> +0x004c7974
+TRACE: init_array[368/505] -> +0x004c7d88
+TRACE: init_array[369/505] -> +0x004c819c
+TRACE: init_array[370/505] -> +0x004c85ac
+TRACE: init_array[371/505] -> +0x004c8a88
+TRACE: init_array[372/505] -> +0x004c8e98
+TRACE: init_array[373/505] -> +0x004c92a8
+TRACE: init_array[374/505] -> +0x004c96b8
+TRACE: init_array[375/505] -> +0x004c9ac8
+TRACE: init_array[376/505] -> +0x004c9edc
+TRACE: init_array[377/505] -> +0x004ca2f4
+TRACE: init_array[378/505] -> +0x004ca704
+TRACE: init_array[379/505] -> +0x004cab14
+TRACE: init_array[380/505] -> +0x004cab54
+TRACE: init_array[381/505] -> +0x004cac9c
+TRACE: init_array[382/505] -> +0x004cad04
+TRACE: init_array[383/505] -> +0x004cadd8
+TRACE: init_array[384/505] -> +0x004cae14
+TRACE: init_array[385/505] -> +0x004cae50
+TRACE: init_array[386/505] -> +0x004cae90
+TRACE: init_array[387/505] -> +0x004caf14
+TRACE: init_array[388/505] -> +0x004caf64
+TRACE: init_array[389/505] -> +0x004cafa0
+TRACE: init_array[390/505] -> +0x004cafdc
+TRACE: init_array[391/505] -> +0x004cb018
+TRACE: init_array[392/505] -> +0x004cb054
+TRACE: init_array[393/505] -> +0x004cb154
+TRACE: init_array[394/505] -> +0x004cb190
+TRACE: init_array[395/505] -> +0x004cb214
+TRACE: init_array[396/505] -> +0x004cb254
+TRACE: init_array[397/505] -> +0x004cb290
+TRACE: init_array[398/505] -> +0x004cb314
+TRACE: init_array[399/505] -> +0x004cb350
+TRACE: init_array[400/505] -> +0x004cb38c
+TRACE: init_array[401/505] -> +0x004cb410
+TRACE: init_array[402/505] -> +0x004cb44c
+TRACE: init_array[403/505] -> +0x004cb488
+TRACE: init_array[404/505] -> +0x004cb4c8
+TRACE: init_array[405/505] -> +0x004cb504
+TRACE: init_array[406/505] -> +0x004cb540
+TRACE: init_array[407/505] -> +0x004cb580
+TRACE: init_array[408/505] -> +0x004cb5bc
+TRACE: init_array[409/505] -> +0x004cb5f8
+TRACE: init_array[410/505] -> +0x004cb634
+TRACE: init_array[411/505] -> +0x004cb670
+TRACE: init_array[412/505] -> +0x004cb6ac
+TRACE: init_array[413/505] -> +0x004cb6e8
+TRACE: init_array[414/505] -> +0x004cb724
+TRACE: init_array[415/505] -> +0x004cb760
+TRACE: init_array[416/505] -> +0x004cb79c
+TRACE: init_array[417/505] -> +0x004cb7d8
+TRACE: init_array[418/505] -> +0x004cb814
+TRACE: init_array[419/505] -> +0x004cb850
+TRACE: init_array[420/505] -> +0x004cb88c
+TRACE: init_array[421/505] -> +0x004cb8c8
+TRACE: init_array[422/505] -> +0x004cb904
+TRACE: init_array[423/505] -> +0x004cb940
+TRACE: init_array[424/505] -> +0x004cb97c
+TRACE: init_array[425/505] -> +0x004cb9b8
+TRACE: init_array[426/505] -> +0x004cb9f4
+TRACE: init_array[427/505] -> +0x004cba30
+TRACE: init_array[428/505] -> +0x004cba6c
+TRACE: init_array[429/505] -> +0x004cbb48
+TRACE: init_array[430/505] -> +0x004cbc18
+TRACE: init_array[431/505] -> +0x004cbc54
+TRACE: init_array[432/505] -> +0x004cbc90
+TRACE: init_array[433/505] -> +0x004cbcd0
+TRACE: init_array[434/505] -> +0x004cbe14
+TRACE: init_array[435/505] -> +0x004cc20c
+TRACE: init_array[436/505] -> +0x004cc248
+TRACE: init_array[437/505] -> +0x004cc2b4
+TRACE: init_array[438/505] -> +0x004cc2f0
+TRACE: init_array[439/505] -> +0x004cc32c
+TRACE: init_array[440/505] -> +0x004cc368
+TRACE: init_array[441/505] -> +0x004cc43c
+TRACE: init_array[442/505] -> +0x004cc478
+TRACE: init_array[443/505] -> +0x004cc4b4
+TRACE: init_array[444/505] -> +0x004cc4f0
+TRACE: init_array[445/505] -> +0x004cc52c
+TRACE: init_array[446/505] -> +0x004cc568
+TRACE: init_array[447/505] -> +0x004cc5a4
+TRACE: init_array[448/505] -> +0x004cc5e0
+TRACE: init_array[449/505] -> +0x004cc61c
+TRACE: init_array[450/505] -> +0x004cc658
+TRACE: init_array[451/505] -> +0x004cc694
+TRACE: init_array[452/505] -> +0x004cc8e4
+TRACE: init_array[453/505] -> +0x004cc950
+TRACE: init_array[454/505] -> +0x004cc98c
+TRACE: init_array[455/505] -> +0x004cc9c8
+TRACE: init_array[456/505] -> +0x004cca8c
+TRACE: init_array[457/505] -> +0x004ccac8
+TRACE: init_array[458/505] -> +0x004ccb34
+TRACE: init_array[459/505] -> +0x004ccb70
+TRACE: init_array[460/505] -> +0x004ccc40
+TRACE: init_array[461/505] -> +0x004ccc7c
+TRACE: init_array[462/505] -> +0x004ccca8
+TRACE: init_array[463/505] -> +0x004ccd18
+TRACE: init_array[464/505] -> +0x004ccd54
+TRACE: init_array[465/505] -> +0x004ccd78
+TRACE: init_array[466/505] -> +0x004ccdd4
+TRACE: init_array[467/505] -> +0x004cce40
+TRACE: init_array[468/505] -> +0x004cce80
+TRACE: init_array[469/505] -> +0x004ccf64
+TRACE: init_array[470/505] -> +0x004ccfd0
+TRACE: init_array[471/505] -> +0x004cd004
+TRACE: init_array[472/505] -> +0x004cd050
+TRACE: init_array[473/505] -> +0x004cd094
+TRACE: init_array[474/505] -> +0x004cd178
+TRACE: init_array[475/505] -> +0x004cd1ac
+TRACE: init_array[476/505] -> +0x004cd61c
+TRACE: init_array[477/505] -> +0x004cd668
+TRACE: init_array[478/505] -> +0x004cd6a8
+TRACE: init_array[479/505] -> +0x004cd6f4
+TRACE: init_array[480/505] -> +0x004cd744
+TRACE: init_array[481/505] -> +0x004cd784
+TRACE: init_array[482/505] -> +0x004cd7a0
+TRACE: init_array[483/505] -> +0x004cd818
+TRACE: init_array[484/505] -> +0x004cda90
+TRACE: init_array[485/505] -> +0x004cdb58
+TRACE: init_array[486/505] -> +0x004cdb68
+TRACE: init_array[487/505] -> +0x004cdbb8
+TRACE: init_array[488/505] -> +0x004cdbec
+TRACE: init_array[489/505] -> +0x004ce7ac
+TRACE: init_array[490/505] -> +0x004cedb4
+TRACE: init_array[491/505] -> +0x004cf0e4
+TRACE: init_array[492/505] -> +0x004cf508
+TRACE: init_array[493/505] -> +0x004cf56c
+TRACE: init_array[494/505] -> +0x004cf9e4
+TRACE: init_array[495/505] -> +0x004cfa70
+TRACE: init_array[496/505] -> +0x004cfe6c
+TRACE: init_array[497/505] -> +0x004cff00
+TRACE: init_array[498/505] -> +0x004cff50
+TRACE: init_array[499/505] -> +0x004d0134
+TRACE: init_array[500/505] -> +0x004d014c
+TRACE: init_array[501/505] -> +0x004d01a8
+TRACE: init_array[502/505] -> +0x004d02fc
+TRACE: init_array[503/505] -> +0x004d0450
+TRACE: static initializers done (504 run, 1 placeholder slots skipped)
+Loaded libAndroid.so...
+TRACE: so_load_module returned (text_base=0x3ad12000 size=24293200)
+TRACE: port main() is at 0x40016919
+TRACE: libc addrs: memcpy=0x3f267440 memset=0x3f262950 strlen=0x3f264b41 sinf=0x3f3a6569 mutex_lock=0x3f254fb9
+TRACE: -> JNI_OnLoad at +0x004d5b00
+TRACE: JNI_OnLoad returned
+TRACE: tweaks: kuser cmpxchg literal replaced at 43 places (routine 0x3ad01000)
+TRACE: input: keys=0x3c12ab68 touch=0x3c12ac58 sticks=(nil)/(nil) mainmenu=(nil)
+TRACE: -> SUtils native init
+TRACE: java stub answered: initCheckConnectionType()I
+TRACE: java stub answered: getGameName()Ljava/lang/String;
+TRACE: java stub answered: getInjectedIGP()Ljava/lang/String;
+TRACE: java stub answered: getInjectedSerialKey()Ljava/lang/String;
+TRACE: <- SUtils native init returned
+TRACE: -> Device native init
+Class Device does not have static method d1()Ljava/lang/String;.
+TRACE: java stub answered: getSerial()Ljava/lang/String;
+TRACE: java stub answered: getSerialNo()Ljava/lang/String;
+TRACE: java stub answered: getDeviceFirmware()Ljava/lang/String;
+TRACE: java stub answered: getMacAddress()Ljava/lang/String;
+TRACE: java stub answered: getDeviceIMEI()Ljava/lang/String;
+TRACE: java stub answered: getHDIDFV()Ljava/lang/String;
+TRACE: java stub answered: getHDIDFVVersion()Ljava/lang/String;
+TRACE: java stub answered: getGLDID()Ljava/lang/String;
+TRACE: java stub answered: getDeviceName()Ljava/lang/String;
+TRACE: java stub answered: getPhoneManufacturer()Ljava/lang/String;
+TRACE: java stub answered: getPhoneModel()Ljava/lang/String;
+TRACE: java stub answered: retrieveCPUSerial()Ljava/lang/String;
+TRACE: <- Device native init returned
+TRACE: -> MC4 native init
+TRACE: <- MC4 native init returned
+TRACE: GL2JNILib.init returned
+TRACE: input mode: touch phone, no PowerA
+TRACE: GL2JNILib.initGL returned
+TRACE: java stub answered: enableAccelerometer(ZF)V
+TRACE: java stub answered: isXperiaPlay()Z
+TRACE: java stub answered: mustSwapButtons()Z
+TRACE: java stub answered: getGyroMode()I
+TRACE: java stub answered: getGyroSensibility()I
+TRACE: java stub answered: isKindleDevice()Z
+TRACE: java stub answered: isKindleOne()Z
+TRACE: java stub answered: isNexus7v2()Z
+TRACE: java stub answered: isHoneycombDevice()Z
+TRACE: java stub answered: isSamsung_P7100()Z
+TRACE: java stub answered: isHTCDevice()Z
+TRACE: setPaths resource='/data/user/0/com.jamescrumble.mc4/files/game/files' home='/data/user/0/com.jamescrumble.mc4/files/game/saves/home' temp='/data/user/0/com.jamescrumble.mc4/files/game/saves/cache'
+TRACE: GL2JNILib.setPaths returned
+TRACE: setViewSettings(pixel=16 depth=16 stencil=8 csaa=0 extra=1)
+TRACE: GL2JNILib.InitViewSettings returned
+TRACE: GL2JNILib.resize(1514, 720) returned
+TRACE: GL2JNILib.stateChanged(true) returned
+TRACE: emulator control ready at /data/user/0/com.jamescrumble.mc4/files/ctl
+TRACE: tweaks: uclamp: sched_setattr unusable here (errno 1) - left alone
+TRACE: -> GL2JNILib.step #1
+TRACE: java stub answered: showloading(I)V
+TRACE: gl bridge: host extensions: GL_OES_EGL_image GL_OES_EGL_image_external GL_OES_EGL_sync GL_OES_vertex_half_float GL_OES_framebuffer_object GL_OES_rgb8_rgba8 GL_OES_compressed_ETC1_RGB8_texture GL_AMD_compressed_ATC_texture GL_KHR_texture_compression_astc_ldr GL_KHR_texture_compression_astc_hdr GL_OES_texture_compression_astc GL_OES_texture_npot GL_EXT_texture_filter_anisotropic GL_EXT_texture_format_BGRA8888 GL_EXT_read_format_bgra GL_OES_texture_3D GL_EXT_color_buffer_float GL_EXT_color_buffer_half_float GL_QCOM_alpha_test GL_OES_depth24 GL_OES_packed_depth_stencil GL_OES_depth_texture GL_OES_depth_texture_cube_map GL_EXT_sRGB GL_OES_texture_float GL_OES_texture_float_linear GL_OES_texture_half_float GL_OES_texture_half_float_linear GL_EXT_texture_type_2_10_10_10_REV GL_EXT_texture_sRGB_decode GL_EXT_texture_format_sRGB_override GL_OES_element_index_uint GL_EXT_copy_image GL_EXT_geometry_shader GL_EXT_tessellation_shader GL_OES_texture_stencil8 GL_EXT_shader_io_blocks GL_OES_shader_image_atomic GL_OES_sample_variables GL_EXT_texture_border_clamp GL_EXT_EGL_image_external_wrap_modes GL_EXT_multisampled_render_to_texture GL_EXT_multisampled_render_to_texture2 GL_OES_shader_multisample_interpolation GL_EXT_texture_cube_map_array GL_EXT_draw_buffers_indexed GL_EXT_gpu_shader5 GL_EXT_robustness GL_EXT_texture_buffer GL_EXT_shader_framebuffer_fetch GL_ARM_shader_framebuffer_fetch_depth_stencil GL_OES_texture_storage_multisample_2d_array GL_OES_sample_shading GL_OES_get_program_binary GL_EXT_debug_label GL_KHR_blend_equation_advanced GL_KHR_blend_equation_advanced_coherent GL_QCOM_tiled_rendering GL_ANDROID_extension_pack_es31a GL_EXT_primitive_bounding_box GL_OES_standard_derivatives GL_OES_vertex_array_object GL_EXT_disjoint_timer_query GL_KHR_debug GL_EXT_YUV_target GL_EXT_sRGB_write_control GL_EXT_texture_norm16 GL_EXT_discard_framebuffer GL_OES_surfaceless_context GL_OVR_multiview GL_OVR_multiview2 GL_EXT_texture_sRGB_R8 GL_KHR_no_error GL_EXT_debug_marker GL_OES_EGL_image_external_essl3 GL_OVR_multiview_multisampled_render_to_texture GL_EXT_buffer_storage GL_EXT_external_buffer GL_EXT_blit_framebuffer_params GL_EXT_clip_cull_distance GL_EXT_protected_textures GL_EXT_shader_non_constant_global_initializers GL_QCOM_texture_foveated GL_QCOM_texture_foveated2 GL_QCOM_texture_foveated_subsampled_layout GL_QCOM_shader_framebuffer_fetch_noncoherent GL_QCOM_shader_framebuffer_fetch_rate GL_EXT_memory_object GL_EXT_memory_object_fd GL_EXT_EGL_image_array GL_NV_shader_noperspective_interpolation GL_KHR_robust_buffer_access_behavior GL_EXT_EGL_image_storage GL_EXT_blend_func_extended GL_EXT_clip_control GL_OES_texture_view GL_EXT_fragment_invocation_density GL_QCOM_motion_estimation GL_QCOM_validate_shader_binary GL_QCOM_YUV_texture_gather GL_QCOM_shading_rate GL_QCOM_frame_extrapolation GL_IMG_texture_filter_cubic GL_QCOM_render_shared_exponent 
+TRACE: gl bridge: exposed extensions: GL_OES_rgb8_rgba8 GL_OES_compressed_ETC1_RGB8_texture GL_AMD_compressed_ATC_texture GL_EXT_texture_filter_anisotropic GL_EXT_texture_format_BGRA8888 GL_OES_texture_3D GL_OES_depth24 GL_OES_packed_depth_stencil GL_OES_depth_texture GL_OES_texture_float GL_OES_texture_float_linear GL_OES_texture_half_float GL_OES_texture_half_float_linear GL_OES_element_index_uint GL_EXT_shader_framebuffer_fetch GL_OES_standard_derivatives GL_EXT_discard_framebuffer
+TRACE: gl bridge: host GL string 0x1f00 = Qualcomm
+TRACE: GL scissor: x=0 y=720 width=0 height=0
+TRACE: SUtils.getPreferenceString('SDFolder', 'GloftM4HMPrefs')
+TRACE: <- GL2JNILib.step #1 returned
+TRACE: frames=1 presented=0
+TRACE: -> GL2JNILib.step #2
+TRACE: pthread_create: entry at +0x013fa398, arg=0x40227238
+TRACE:   ^ pthread_t=0x3acde320 stack=0x3a4df000..0x3acdf000
+TRACE: obb: patch file patch.12222.com.gameloft.android.ANMP.GloftM4HM.obb
+TRACE: Process.setThreadPriority(0) and later calls ignored
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/obb/patch.12222.com.gameloft.android.ANMP.GloftM4HM.obb' -> '/data/user/0/com.jamescrumble.mc4/files/game/obb/patch.12222.com.gameloft.android.ANMP.GloftM4HM.obb' (ok)
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/obb/main.1100.com.gameloft.android.ANMP.GloftM4HM.obb' -> '/data/user/0/com.jamescrumble.mc4/files/game/obb/main.1100.com.gameloft.android.ANMP.GloftM4HM.obb' (ok)
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/files/data_1' -> '/data/user/0/com.jamescrumble.mc4/files/game/files/data_1' (ENOENT)
+TRACE: pthread_create: entry at +0x013fa398, arg=0x3a300948
+TRACE:   ^ pthread_t=0x3a2ff320 stack=0x39b00000..0x3a300000
+TRACE: pthread_create: entry at +0x013fa398, arg=0x3a3009f8
+TRACE:   ^ pthread_t=0x398ff320 stack=0x39100000..0x39900000
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/obb/main.1100.com.gameloft.android.ANMP.GloftM4HM.obb' -> '/data/user/0/com.jamescrumble.mc4/files/game/obb/main.1100.com.gameloft.android.ANMP.GloftM4HM.obb' (ok)
+TRACE: pthread_create: entry at +0x013fa398, arg=0x38f009e8
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/files/data_3' -> '/data/user/0/com.jamescrumble.mc4/files/game/files/data_3' (ENOENT)
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/obb/main.1100.com.gameloft.android.ANMP.GloftM4HM.obb' -> '/data/user/0/com.jamescrumble.mc4/files/game/obb/main.1100.com.gameloft.android.ANMP.GloftM4HM.obb' (ok)
+TRACE:   ^ pthread_t=0x38eff320 stack=0x38700000..0x38f00000
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/obb/patch.12222.com.gameloft.android.ANMP.GloftM4HM.obb' -> '/data/user/0/com.jamescrumble.mc4/files/game/obb/patch.12222.com.gameloft.android.ANMP.GloftM4HM.obb' (ok)
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/obb/main.1100.com.gameloft.android.ANMP.GloftM4HM.obb' -> '/data/user/0/com.jamescrumble.mc4/files/game/obb/main.1100.com.gameloft.android.ANMP.GloftM4HM.obb' (ok)
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/obb/patch.12222.com.gameloft.android.ANMP.GloftM4HM.obb' -> '/data/user/0/com.jamescrumble.mc4/files/game/obb/patch.12222.com.gameloft.android.ANMP.GloftM4HM.obb' (ok)
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/obb/main.1100.com.gameloft.android.ANMP.GloftM4HM.obb' -> '/data/user/0/com.jamescrumble.mc4/files/game/obb/main.1100.com.gameloft.android.ANMP.GloftM4HM.obb' (ok)
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/obb/patch.12222.com.gameloft.android.ANMP.GloftM4HM.obb' -> '/data/user/0/com.jamescrumble.mc4/files/game/obb/patch.12222.com.gameloft.android.ANMP.GloftM4HM.obb' (ok)
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/obb/main.1100.com.gameloft.android.ANMP.GloftM4HM.obb' -> '/data/user/0/com.jamescrumble.mc4/files/game/obb/main.1100.com.gameloft.android.ANMP.GloftM4HM.obb' (ok)
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/files//data/user/0/com.jamescrumble.mc4/files/game/saves/LogFilters.dat' -> '/data/user/0/com.jamescrumble.mc4/files/game/saves/LogFilters.dat' (ENOENT)
+TRACE: io: fopen '/data/user/0/com.jamescrumble.mc4/files/game/files//data/user/0/com.jamescrumble.mc4/files/game/saves/LogFilters.dat' -> '/data/user/0/com.jamescrumble.mc4/files/game/saves/LogFilters.dat' (ENOENT)
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/files//data/user/0/com.jamescrumble.mc4/files/game/saves/LogFilters.dat' -> '/data/user/0/com.jamescrumble.mc4/files/game/saves/LogFilters.dat' (ok)
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/files//data/user/0/com.jamescrumble.mc4/files/game/saves/LogFilters.dat' -> '/data/user/0/com.jamescrumble.mc4/files/game/saves/LogFilters.dat' (ok)
+TRACE: pthread_create: entry at +0x00f1f364, arg=0x40238fe8
+TRACE:   ^ pthread_t=0x38eff320 stack=0x38700000..0x38f00000
+TRACE: AudioTrack(stream=3 rate=44100 channels=2 bits=16 buffer=8112 mode=1)
+TRACE: pthread_create: entry at +0x00effd20, arg=0x404cb360
+TRACE: AudioTrack: direct output to /data/user/0/com.jamescrumble.mc4/files/audio.pcm
+TRACE: AudioTrack.play()
+TRACE: AudioTrack.write: first block, 4096 bytes
+TRACE:   ^ pthread_t=0x3a2ff320 stack=0x39b00000..0x3a300000
+TRACE: pthread_create: entry at +0x00effd20, arg=0x404cb2f0
+TRACE:   ^ pthread_t=0x38273320 stack=0x37a74000..0x38274000
+TRACE: pthread_create: entry at +0x013fa398, arg=0x404e1d68
+TRACE:   ^ pthread_t=0x37a72320 stack=0x37273000..0x37a73000
+TRACE: java stub answered: getMac()Ljava/lang/String;
+TRACE: java stub answered: enableGyroscope(ZF)V
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/files//data/user/0/com.jamescrumble.mc4/files/game/saves/flex.data' -> '/data/user/0/com.jamescrumble.mc4/files/game/saves/flex.data' (ENOENT)
+TRACE: io: fopen '/data/user/0/com.jamescrumble.mc4/files/game/files//data/user/0/com.jamescrumble.mc4/files/game/saves/flex.data' -> '/data/user/0/com.jamescrumble.mc4/files/game/saves/flex.data' (ENOENT)
+TRACE: java stub answered: hasConnectivity()Z
+TRACE: java stub answered: getIdentifier()Ljava/lang/String;
+TRACE: java stub answered: getSystemUpTimeMillis()J
+TRACE: asset 'eventParameters.json': 20749 bytes
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/files//data/user/0/com.jamescrumble.mc4/files/game/saves/BI.trk' -> '/data/user/0/com.jamescrumble.mc4/files/game/saves/BI.trk' (ENOENT)
+TRACE: io: fopen '/data/user/0/com.jamescrumble.mc4/files/game/files//data/user/0/com.jamescrumble.mc4/files/game/saves/BI.trk' -> '/data/user/0/com.jamescrumble.mc4/files/game/saves/BI.trk' (ENOENT)
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/files//data/user/0/com.jamescrumble.mc4/files/game/saves/BI.trk' -> '/data/user/0/com.jamescrumble.mc4/files/game/saves/BI.trk' (ok)
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/files//data/user/0/com.jamescrumble.mc4/files/game/saves/BI.trk' -> '/data/user/0/com.jamescrumble.mc4/files/game/saves/BI.trk' (ok)
+TRACE: io: fopen './/data/user/0/com.jamescrumble.mc4/files/game/files//data/user/0/com.jamescrumble.mc4/files/game/saves/BI.trk' -> '/data/user/0/com.jamescrumble.mc4/files/game/saves/BI.trk' (ok)
+
+FATAL: [tid 0x00000f09] SIGSEGV at 0x00000028
+       pc = 0x3b5d6b9c  (libModernCombat4.so+0x008c4b9c)
+       lr = 0x3b5d6438  (libModernCombat4.so+0x008c4438)
+       sp = 0x3fffa068
+       r0 = 0x00000000
+       r1 = 0x3fffa0bc
+       r2 = 0x00000000
+       r3 = 0x00000000
+       ip = 0x3c4b0b18
+       [r1] = 0x2f62696c 0x656d7261 0x2d696261 0x2f613776
+       [ip] = 0x3f2654dd 0x3f21f8d9 0x4003e0bd 0x3f264ea9
+       [sp] = 0x00000008 0x00000000 0x00000000 0x3f7fde54
+       backtrace (unwound, innermost first):
+         libModernCombat4.so+0x008c4b9c
+         libModernCombat4.so+0x008c4438
+         libModernCombat4.so+0x008aaa44
+         libModernCombat4.so+0x008b8e3c
+         (chain ends here - the tables cannot go further)
+       module text at 0x3ad12000
+       stack (module return addresses, innermost first):
+         libModernCombat4.so+0x008c4438
+         libModernCombat4.so+0x008aaa44
+         libModernCombat4.so+0x008b8e3c
+         libModernCombat4.so+0x0067e0a0
+         libModernCombat4.so+0x00d1894c
+         libModernCombat4.so+0x0067e0a0
+         libModernCombat4.so+0x00d1894c
+         libModernCombat4.so+0x0067e0a0
+         libModernCombat4.so+0x00d1894c
+         libModernCombat4.so+0x0067e0a0
+         libModernCombat4.so+0x00d1894c
+         libModernCombat4.so+0x00d0b8dc
+         libModernCombat4.so+0x0067e0a0
+         libModernCombat4.so+0x00d1894c
+         libModernCombat4.so+0x004f6164
+         libModernCombat4.so+0x00d1337c
+qemu: uncaught target signal 11 (Segmentation fault) - core dumped
+[wrapper] qemu exited with code 139 (signal 11) after 1356 ms

@@ -1,0 +1,6 @@
+{
+  "name": "MC4 Rework & Bridge Studio",
+  "description": "Interactive hub, repository explorer, architecture analyzer, and config builder for MC4 Rework (Modern Combat 4 32-bit to 64-bit Android bridge).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
