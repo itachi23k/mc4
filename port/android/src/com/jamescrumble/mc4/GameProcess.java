@@ -228,15 +228,31 @@ final class GameProcess {
 
         File external = Storage.mainDir(ctx);
         String where = Storage.describe(ctx);
+        File targetSo = new File(libDir, "libModernCombat4.so");
+        File looseSo = Storage.find(ctx, "libModernCombat4.so");
+        if (looseSo == null || !looseSo.exists()) looseSo = Storage.find(ctx, "lib/libModernCombat4.so");
+        if (looseSo == null || !looseSo.exists()) looseSo = Storage.find(ctx, "lib/armeabi-v7a/libModernCombat4.so");
+
         File apk = external == null ? null : Storage.firstWithSuffix(ctx, ".apk");
-        if (apk == null) {
-            throw new IOException("APK original do jogo não encontrado (v1.2.3e ou v1.2.1a).\nColoque-o na pasta:\n" + where);
+
+        if (looseSo != null && looseSo.exists()) {
+            listener.onStatus("Carregando libModernCombat4.so solta…");
+            Storage.copyFile(looseSo, targetSo);
+        } else if (apk != null && apk.exists()) {
+            listener.onStatus("Extraindo libModernCombat4.so do APK…");
+            extractNative(apk, targetSo);
+        } else if (!targetSo.exists() || targetSo.length() == 0) {
+            throw new IOException("Nenhum arquivo 'libModernCombat4.so' ou APK original encontrado.\nColoque a .so ou o .apk do jogo na pasta:\n" + where);
         }
-        listener.onStatus("Extraindo libModernCombat4.so…");
-        extractNative(apk, new File(libDir, "libModernCombat4.so"));
-        // The engine asks Java for files out of the APK's assets and opens the APK itself as a zip.
-        extractAssets(apk, new File(game, "assets"));
-        relink(new File(game, "game.apk"), apk);
+
+        if (apk != null && apk.exists()) {
+            extractAssets(apk, new File(game, "assets"));
+            relink(new File(game, "game.apk"), apk);
+        } else {
+            File dummyApk = new File(game, "game.apk");
+            if (!dummyApk.exists()) dummyApk.createNewFile();
+            new File(game, "assets").mkdirs();
+        }
         // The folder the engine takes for the SD card one: it looks for loose data files there before the OBB.
         new File(game, "files").mkdirs();
 
