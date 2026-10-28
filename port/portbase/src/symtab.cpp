@@ -146,6 +146,7 @@ const char *so_builtin_libs[] = {
     "libstdc++.so",
     "liblog.so",
     "libandroid.so",
+    "libAndroid.so",
     "libz.so",
     "libEGL.so",
     "libGLESv2.so",

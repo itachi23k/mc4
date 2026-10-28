@@ -1,3 +1,4 @@
+#include <strings.h>
 /* so_util.c -- utils to load and hook .so modules
  *
  * Copyright (C) 2021 Andy Nguyen
@@ -342,7 +343,7 @@ static uintptr_t get_static_load_addr(std::string filename)
 static bool has_builtin_lib(std::string filename)
 {
     for (int i = 0; so_builtin_libs[i] != NULL; i++) {
-      if (filename.starts_with(so_builtin_libs[i]))
+      if (strncasecmp(filename.c_str(), so_builtin_libs[i], strlen(so_builtin_libs[i])) == 0)
         return true;
     }
     return false;
