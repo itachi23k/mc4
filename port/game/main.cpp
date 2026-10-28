@@ -305,6 +305,9 @@ int main(int argc, char **argv)
         }
         gl = (SDL_GLContext)(uintptr_t)1;
         load_gles2_funcs();
+        setenv("MC4_GL_SINGLE_DISPATCH", "1", 0);
+        load_gles1_funcs();
+        viewport_scale_init(kWidth, kHeight);
     } else {
         const Uint32 sdl_flags = SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER;
         if (SDL_Init(sdl_flags) != 0) {
@@ -316,6 +319,7 @@ int main(int argc, char **argv)
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+
             window = SDL_CreateWindow("Modern Combat 4",
                                       SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
                                       kWidth, kHeight,
@@ -325,57 +329,27 @@ int main(int argc, char **argv)
             else if (!(gl = SDL_GL_CreateContext(window)))
                 trace("no GLES 2.0 context: %s", SDL_GetError());
         }
+
         if (gl) {
             load_gles2_funcs();
-        }
-    }
-        load_gles2_funcs();
+            setenv("MC4_GL_SINGLE_DISPATCH", "1", 0);
+            load_gles1_funcs();
 
-        /*
-         * The GLES1 table has to be filled too, and not because this game
-         * imports GLES1. It imports none - all 100 of its gl* imports are
-         * shader-pipeline calls.
-         *
-         * portbase resolves several of its own diagnostics through
-         * find_gles1_function() and nothing else: the framebuffer probe is one
-         * of them, and with the table empty it prints
-         *
-         *     framebuffer probe disabled: GL entry points unresolved
-         *
-         * and the run reports a black screen while the engine is uploading 755
-         * textures and issuing 4819 draws. That is the probe being blind, not
-         * the game being black, and the two are indistinguishable from a log
-         * that only shows the counters.
-         *
-         * GL_SINGLE_DISPATCH is what makes filling it safe. It is portbase's
-         * own switch, and it forces every GLES1-table name through
-         * SDL_GL_GetProcAddress instead of dlsym on the GLESv1_CM provider, so
-         * everything lands in the same dispatch as the GLES2 context SDL gave
-         * us. Without it the emulator can bind them in desktop GL while SDL
-         * uses GLES2, two ABIs that share no state; on the device libmali
-         * exports EGL, GLESv1_CM and GLESv2 from one blob and both routes are
-         * the same pointer. Set as a default rather than an override, so an
-         * explicit MC4_GL_SINGLE_DISPATCH still wins for A/B runs.
-         */
-        setenv("MC4_GL_SINGLE_DISPATCH", "1", 0);
-        load_gles1_funcs();
+            int w = 0, h = 0;
+            SDL_GL_GetDrawableSize(window, &w, &h);
+            trace("drawable %dx%d", w, h);
+            viewport_scale_init(w, h);
 
-        int w = 0, h = 0;
-        SDL_GL_GetDrawableSize(window, &w, &h);
-        trace("drawable %dx%d", w, h);
-        viewport_scale_init(w, h);
-
-        const GLubyte *(*get_string)(GLenum) =
-            (const GLubyte *(*)(GLenum))SDL_GL_GetProcAddress("glGetString");
-        if (get_string) {
-            const char *ver = (const char *)get_string(0x1F02 /* GL_VERSION  */);
-            const char *rnd = (const char *)get_string(0x1F01 /* GL_RENDERER */);
-            trace("GL_VERSION=%s | GL_RENDERER=%s", ver ? ver : "?", rnd ? rnd : "?");
+            const GLubyte *(*get_string)(GLenum) =
+                (const GLubyte *(*)(GLenum))SDL_GL_GetProcAddress("glGetString");
+            if (get_string) {
+                const char *ver = (const char *)get_string(0x1F02 /* GL_VERSION  */);
+                const char *rnd = (const char *)get_string(0x1F01 /* GL_RENDERER */);
+                trace("GL_VERSION=%s | GL_RENDERER=%s", ver ? ver : "?", rnd ? rnd : "?");
+            }
         }
     }
 
-    /* The engine presents by itself: eglSwapBuffers on the current display and
-     * surface (and GL2JNILib.SwapBuffer() from Java on some paths). */
     g_window = window;
     android_egl_set_presenter(mc4_present);
 

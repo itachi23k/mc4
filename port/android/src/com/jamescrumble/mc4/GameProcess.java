@@ -379,14 +379,6 @@ final class GameProcess {
         // 0x1000 and be refused; a non-zero guest base sidesteps that.
         // The default "any" CPU makes qemu emulate NEON/VFP through slow helpers; a real Cortex-A15
         // profile is several times faster on the game's own code.
-        b.command().add("-cpu");
-        b.command().add("cortex-a15");
-        b.command().add("-B");
-        b.command().add("0x100000000");
-        b.command().add("-L");
-        b.command().add(new File(root, "sysroot").getPath());
-        b.command().add(new File(root, "bin/mc4").getPath());
-        b.command().add(new File(root, "game").getPath());
         Map<String, String> env = b.environment();
         env.put("HOME", new File(root, "home").getPath());
         env.put("SDL_VIDEODRIVER", "dummy");
@@ -423,6 +415,21 @@ final class GameProcess {
         for (java.util.Map.Entry<String, String> e : SettingsActivity.load(ctx).entrySet())
             if (!e.getKey().equals("RENDER_HEIGHT") && !e.getKey().equals("CPU_PRIME")
                     && !e.getKey().equals("AUDIO_LATENCY_MS") && !e.getKey().equals("PERF_HINT")) env.put(e.getKey(), e.getValue());
+
+        b.command().add("-cpu");
+        b.command().add("cortex-a15");
+        b.command().add("-B");
+        b.command().add("0x100000000");
+        b.command().add("-L");
+        b.command().add(new File(root, "sysroot").getPath());
+
+        for (java.util.Map.Entry<String, String> entry : env.entrySet()) {
+            b.command().add("-E");
+            b.command().add(entry.getKey() + "=" + entry.getValue());
+        }
+
+        b.command().add(new File(root, "bin/mc4").getPath());
+        b.command().add(new File(root, "game").getPath());
         // The credits to set are a one-shot value: they go to the game only while the infinite balance is off,
         // and are removed from settings.txt once handed over.
         if (!"1".equals(env.get("MC4_MONEY_INFINITE")) && env.containsKey("MC4_MONEY_RESTORE")) {
