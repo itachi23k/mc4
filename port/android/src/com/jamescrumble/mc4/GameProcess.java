@@ -389,7 +389,7 @@ final class GameProcess {
         b.command().add(new File(root, "game").getPath());
         Map<String, String> env = b.environment();
         env.put("HOME", new File(root, "home").getPath());
-        env.put("SDL_VIDEODRIVER", "offscreen");
+        env.put("SDL_VIDEODRIVER", "dummy");
         env.put("SDL_AUDIODRIVER", "disk");
         env.put("SDL_DISKAUDIOFILE", fifo.getPath());
         // The port's AudioTrack class writes the game's mixer blocks straight into the FIFO (see audioLoop()).

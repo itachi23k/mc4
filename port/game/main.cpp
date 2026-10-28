@@ -297,41 +297,38 @@ int main(int argc, char **argv)
     SDL_Window   *window = NULL;
     SDL_GLContext gl     = NULL;
 
-    /* Under the Android wrapper the pads are read by the Java side and arrive as commands; SDL's own
-     * joystick subsystem would only keep probing for libudev (hundreds of failed opens a second,
-     * each a guest syscall out of translated code). */
-    const Uint32 sdl_flags = SDL_INIT_VIDEO | (gl_bridge_enabled() ? 0 : SDL_INIT_GAMECONTROLLER);
-    if (SDL_Init(sdl_flags) != 0) {
-        trace("SDL_Init(0x%x) failed: %s", sdl_flags, SDL_GetError());
-    } else {
-        SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-        /* What the engine asks its Java for (setViewSettings: depth 24, stencil 8). Without a stencil
-         * buffer the minimap's clipping is lost and the map plane covers a third of the screen. */
-        SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-        SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
-        SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-
-        window = SDL_CreateWindow("Modern Combat 4",
-                                  SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-                                  kWidth, kHeight,
-                                  gl_bridge_enabled() ? 0 : SDL_WINDOW_OPENGL);
-        if (!window)
-            trace("SDL_CreateWindow failed: %s", SDL_GetError());
-        else if (gl_bridge_enabled()) {
-            /* The GL context lives in the host app; here it is only a token. */
-            if (!gl_bridge_init()) {
-                fatal("could not connect to the GL host.");
-                return 1;
-            }
-            gl = (SDL_GLContext)(uintptr_t)1;
+    if (gl_bridge_enabled()) {
+        /* On Android, GL rendering goes directly through GlBridge over FIFOs. */
+        if (!gl_bridge_init()) {
+            fatal("could not connect to the GL host.");
+            return 1;
         }
-        else if (!(gl = SDL_GL_CreateContext(window)))
-            trace("no GLES 2.0 context: %s", SDL_GetError());
+        gl = (SDL_GLContext)(uintptr_t)1;
+        load_gles2_funcs();
+    } else {
+        const Uint32 sdl_flags = SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER;
+        if (SDL_Init(sdl_flags) != 0) {
+            trace("SDL_Init(0x%x) failed: %s", sdl_flags, SDL_GetError());
+        } else {
+            SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+            SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+            SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+            window = SDL_CreateWindow("Modern Combat 4",
+                                      SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+                                      kWidth, kHeight,
+                                      SDL_WINDOW_OPENGL);
+            if (!window)
+                trace("SDL_CreateWindow failed: %s", SDL_GetError());
+            else if (!(gl = SDL_GL_CreateContext(window)))
+                trace("no GLES 2.0 context: %s", SDL_GetError());
+        }
+        if (gl) {
+            load_gles2_funcs();
+        }
     }
-
-    if (gl) {
         load_gles2_funcs();
 
         /*
