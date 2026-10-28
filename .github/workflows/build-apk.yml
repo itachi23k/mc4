@@ -87,6 +87,7 @@ jobs:
             zip \
             unzip \
             file \
+            libbsd-dev:armhf \
             libsdl2-dev:armhf \
             zlib1g-dev:armhf \
             libzip-dev:armhf \
