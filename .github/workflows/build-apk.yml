@@ -54,16 +54,30 @@ jobs:
 
       - name: Install ARMhf Cross-Compilation Toolchain & Dependencies
         run: |
-          sudo dpkg --add-architecture armhf
-          
-          # Restrict all existing APT sources in /etc/apt to amd64,i386 so security.ubuntu.com is never queried for armhf
-          sudo find /etc/apt/ -type f \( -name "*.list" -o -name "*.sources" \) -exec sed -i -e 's/deb http/deb [arch=amd64,i386] http/g' -e 's/deb https/deb [arch=amd64,i386] https/g' {} +
-          
-          # Create dedicated ports.ubuntu.com list for armhf
-          echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ jammy main restricted universe multiverse" | sudo tee /etc/apt/sources.list.d/ports-armhf.list
-          echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ jammy-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/ports-armhf.list
-          echo "deb [arch=armhf] http://ports.ubuntu.com/ubuntu-ports/ jammy-security main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list.d/ports-armhf.list
+          set -euxo pipefail
 
+          # Remove default sources and isolate amd64 / armhf in deb822 format
+          sudo rm -f /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list
+
+          sudo tee /etc/apt/sources.list.d/ubuntu-amd64.sources >/dev/null <<'EOF'
+          Types: deb
+          URIs: http://archive.ubuntu.com/ubuntu
+          Suites: jammy jammy-updates jammy-security jammy-backports
+          Components: main restricted universe multiverse
+          Architectures: amd64
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF
+
+          sudo tee /etc/apt/sources.list.d/ubuntu-armhf.sources >/dev/null <<'EOF'
+          Types: deb
+          URIs: http://ports.ubuntu.com/ubuntu-ports
+          Suites: jammy jammy-updates jammy-security jammy-backports
+          Components: main restricted universe multiverse
+          Architectures: armhf
+          Signed-By: /usr/share/keyrings/ubuntu-archive-keyring.gpg
+          EOF
+
+          sudo dpkg --add-architecture armhf
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             gcc-arm-linux-gnueabihf \
