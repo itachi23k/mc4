@@ -1,0 +1,252 @@
+From 3f20a897b2849e2e36eac1b377581ed901277727 Mon Sep 17 00:00:00 2001
+From: cassio <cassio@mc4rework.local>
+Date: Wed, 28 Oct 2026 14:24:22 +0000
+Subject: [PATCH] fix(jni): add Device.d1() stub, fix sysroot paths & add
+ GitHub Actions APK CI workflow
+
+---
+ .github/workflows/build-apk.yml | 113 ++++++++++++++++++++++++++++++++
+ env.sh                          |  15 +++--
+ port/android/build_apk.sh       |   2 +-
+ port/android/make_sysroot.sh    |  19 ++++--
+ port/game/jni/device_gen.inc    |   3 +
+ tools/build_install.sh          |   1 +
+ tools/make_release.sh           |   1 +
+ 7 files changed, 144 insertions(+), 10 deletions(-)
+ create mode 100644 .github/workflows/build-apk.yml
+ mode change 100644 => 100755 env.sh
+
+diff --git a/.github/workflows/build-apk.yml b/.github/workflows/build-apk.yml
+new file mode 100644
+index 0000000..cf3f52e
+--- /dev/null
++++ b/.github/workflows/build-apk.yml
+@@ -0,0 +1,113 @@
++name: Build MC4 Bridge APK
++
++on:
++  push:
++    branches: [ master, main ]
++    tags: [ 'v*' ]
++  pull_request:
++    branches: [ master, main ]
++  workflow_dispatch:
++
++permissions:
++  contents: write
++
++jobs:
++  build:
++    name: Build & Package APK
++    runs-on: ubuntu-22.04
++
++    steps:
++      - name: Checkout Repository
++        uses: actions/checkout@v4
++        with:
++          submodules: recursive
++          fetch-depth: 0
++
++      - name: Set up Java 17
++        uses: actions/setup-java@v4
++        with:
++          distribution: 'temurin'
++          java-version: '17'
++
++      - name: Set up Go
++        uses: actions/setup-go@v5
++        with:
++          go-version: '1.22'
++
++      - name: Set up Python
++        uses: actions/setup-python@v5
++        with:
++          python-version: '3.10'
++
++      - name: Set up Android SDK
++        uses: android-actions/setup-android@v3
++
++      - name: Install Android SDK Build Tools
++        run: |
++          yes | sdkmanager --licenses || true
++          sdkmanager "build-tools;34.0.0" "platforms;android-34"
++
++      - name: Install ARMhf Cross-Compilation Toolchain & Dependencies
++        run: |
++          sudo dpkg --add-architecture armhf
++          sudo apt-get update
++          sudo apt-get install -y --no-install-recommends \
++            gcc-arm-linux-gnueabihf \
++            g++-arm-linux-gnueabihf \
++            libc6-armhf-cross \
++            pkg-config \
++            zip \
++            unzip \
++            file \
++            libsdl2-dev:armhf \
++            zlib1g-dev:armhf \
++            libzip-dev:armhf \
++            libgl1-mesa-dev:armhf \
++            libegl1-mesa-dev:armhf \
++            libgles2-mesa-dev:armhf \
++            libgl1-mesa-dri:armhf \
++            libegl-mesa0:armhf \
++            libglapi-mesa:armhf \
++            libglvnd-dev:armhf
++
++      - name: Fetch Debian ARM64 Static QEMU
++        run: |
++          mkdir -p downloads/qemu-debian
++          DEB_NAME=$(curl -sL "http://ftp.debian.org/debian/pool/main/q/qemu/" | grep -o 'qemu-user-static_7\.2[^"]*arm64\.deb' | head -1)
++          if [ -z "$DEB_NAME" ]; then
++            DEB_NAME=$(curl -sL "http://ftp.debian.org/debian/pool/main/q/qemu/" | grep -o 'qemu-user-static_[0-9][^"]*arm64\.deb' | head -1)
++          fi
++          echo "Downloading $DEB_NAME..."
++          curl -sSL -o /tmp/qemu.deb "http://ftp.debian.org/debian/pool/main/q/qemu/$DEB_NAME"
++          dpkg-deb -x /tmp/qemu.deb /tmp/qemu-deb
++          cp /tmp/qemu-deb/usr/bin/qemu-arm-static downloads/qemu-debian/qemu-arm-static
++          chmod +x downloads/qemu-debian/qemu-arm-static
++          file downloads/qemu-debian/qemu-arm-static
++
++      - name: Compile Game Port (ARM32 mc4)
++        run: |
++          mkdir -p logs
++          bash build.sh
++
++      - name: Build & Sign Release APK
++        run: |
++          mkdir -p logs
++          cd port
++          RELEASE=1 bash android/build_apk.sh
++          ls -lh MC4-Bridge-*.apk
++
++      - name: Upload APK Artifact
++        uses: actions/upload-artifact@v4
++        with:
++          name: MC4-Bridge-APK
++          path: port/MC4-Bridge-*.apk
++          if-no-files-found: error
++
++      - name: Create Release
++        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/master')
++        uses: softprops/action-gh-release@v2
++        with:
++          files: port/MC4-Bridge-*.apk
++          generate_release_notes: true
++        env:
++          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+diff --git a/env.sh b/env.sh
+old mode 100644
+new mode 100755
+index a25be94..06ce026
+--- a/env.sh
++++ b/env.sh
+@@ -4,9 +4,14 @@ _P="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+ export MC4_PROBE="$_P"
+ export MC4_REPO="$_P/port"
+ export MC4_GAMEDIR="$_P/mc4data"
+-export JAVA_HOME="$_P/jdk"
+-export ANDROID_HOME="$_P/android-sdk"
+-export ANDROID_SDK_ROOT="$ANDROID_HOME"
+-export PKG_CONFIG_PATH="$_P/sdl-arm/lib/pkgconfig"
+-export PATH="$JAVA_HOME/bin:$ANDROID_HOME/build-tools/34.0.0:$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
++
++[ -d "$_P/jdk" ] && export JAVA_HOME="${JAVA_HOME:-$_P/jdk}"
++export ANDROID_HOME="${ANDROID_HOME:-$_P/android-sdk}"
++export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
++
++if [ -d "$_P/sdl-arm/lib/pkgconfig" ]; then
++    export PKG_CONFIG_PATH="$_P/sdl-arm/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
++fi
++
++export PATH="${JAVA_HOME:+$JAVA_HOME/bin:}${ANDROID_HOME:+$ANDROID_HOME/build-tools/34.0.0:$ANDROID_HOME/cmdline-tools/latest/bin:}$PATH"
+ unset _P
+diff --git a/port/android/build_apk.sh b/port/android/build_apk.sh
+index 3373c02..94c2335 100644
+--- a/port/android/build_apk.sh
++++ b/port/android/build_apk.sh
+@@ -2,7 +2,7 @@
+ set -euo pipefail
+ 
+ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+-SDK="${ANDROID_SDK_ROOT:-$ROOT/../android-sdk}"
++SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$ROOT/../android-sdk}}"
+ BT="$SDK/build-tools/34.0.0"
+ PLATFORM="$SDK/platforms/android-34/android.jar"
+ OUT="$ROOT/android/build/apk"
+diff --git a/port/android/make_sysroot.sh b/port/android/make_sysroot.sh
+index 437305b..c4a17c1 100755
+--- a/port/android/make_sysroot.sh
++++ b/port/android/make_sysroot.sh
+@@ -57,10 +57,21 @@ while [ $i -lt ${#QUEUE[@]} ]; do
+     while read -r n; do enqueue "$n"; done < <(needed "$src")
+ done
+ 
+-cp "$(readlink -f /usr/arm-linux-gnueabihf/lib/ld-linux-armhf.so.3)" "$OUT/lib/ld-linux-armhf.so.3"
+-
+-cp /usr/share/glvnd/egl_vendor.d/50_mesa.json "$OUT/usr/share/glvnd/egl_vendor.d/"
+-cp /usr/share/drirc.d/00-mesa-defaults.conf "$OUT/usr/share/drirc.d/"
++LD_SO=""
++for candidate in /usr/arm-linux-gnueabihf/lib/ld-linux-armhf.so.3 /lib/arm-linux-gnueabihf/ld-linux-armhf.so.3 /usr/lib/arm-linux-gnueabihf/ld-linux-armhf.so.3; do
++    if [ -e "$candidate" ]; then
++        LD_SO="$candidate"
++        break
++    fi
++done
++if [ -n "$LD_SO" ]; then
++    cp "$(readlink -f "$LD_SO")" "$OUT/lib/ld-linux-armhf.so.3"
++else
++    echo "ERROR: ld-linux-armhf.so.3 not found" >&2
++    exit 1
++fi
++[ -f /usr/share/glvnd/egl_vendor.d/50_mesa.json ] && cp /usr/share/glvnd/egl_vendor.d/50_mesa.json "$OUT/usr/share/glvnd/egl_vendor.d/" || true
++[ -f /usr/share/drirc.d/00-mesa-defaults.conf ] && cp /usr/share/drirc.d/00-mesa-defaults.conf "$OUT/usr/share/drirc.d/" || true
+ echo 'app:x:10000:10000::/data:/bin/sh' > "$OUT/etc/passwd"
+ echo 'passwd: files' > "$OUT/etc/nsswitch.conf"
+ 
+diff --git a/port/game/jni/device_gen.inc b/port/game/jni/device_gen.inc
+index b180505..b8b339d 100644
+--- a/port/game/jni/device_gen.inc
++++ b/port/game/jni/device_gen.inc
+@@ -17,6 +17,8 @@ static jobject Device_gen_15(JNIEnv *env, jclass c) { (void)env; GEN_SAID("retri
+ static jobject Device_gen_16(JNIEnv *env, jclass c) { (void)env; GEN_SAID("retrieveDeviceCountry()Ljava/lang/String;"); return (jobject)env->NewStringUTF(""); }
+ static jobject Device_gen_17(JNIEnv *env, jclass c) { (void)env; GEN_SAID("retrieveDeviceLanguage()Ljava/lang/String;"); return (jobject)env->NewStringUTF(""); }
+ static jobject Device_gen_18(JNIEnv *env, jclass c) { (void)env; GEN_SAID("retrieveDeviceRegion()Ljava/lang/String;"); return (jobject)env->NewStringUTF(""); }
++static jobject Device_gen_d1(JNIEnv *env, jclass c) { (void)env; GEN_SAID("d1()Ljava/lang/String;"); return (jobject)env->NewStringUTF(""); }
++
+ #define DEVICE_GEN_METHODS \
+     ManagedMethod::RegisterStatic<&Device_gen_0>(GloftDevice::clazz, "getDeviceFirmware", "()Ljava/lang/String;"), \
+     ManagedMethod::RegisterStatic<&Device_gen_1>(GloftDevice::clazz, "getDeviceIMEI", "()Ljava/lang/String;"), \
+@@ -37,4 +39,5 @@ static jobject Device_gen_18(JNIEnv *env, jclass c) { (void)env; GEN_SAID("retri
+     ManagedMethod::RegisterStatic<&Device_gen_16>(GloftDevice::clazz, "retrieveDeviceCountry", "()Ljava/lang/String;"), \
+     ManagedMethod::RegisterStatic<&Device_gen_17>(GloftDevice::clazz, "retrieveDeviceLanguage", "()Ljava/lang/String;"), \
+     ManagedMethod::RegisterStatic<&Device_gen_18>(GloftDevice::clazz, "retrieveDeviceRegion", "()Ljava/lang/String;"), \
++    ManagedMethod::RegisterStatic<&Device_gen_d1>(GloftDevice::clazz, "d1", "()Ljava/lang/String;"), \
+     /* end */
+diff --git a/tools/build_install.sh b/tools/build_install.sh
+index cbeef97..a983a81 100644
+--- a/tools/build_install.sh
++++ b/tools/build_install.sh
+@@ -5,6 +5,7 @@
+ P=${MC4_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}
+ set -euo pipefail
+ source "$P/env.sh"
++mkdir -p "$P/logs"
+ "$P/build.sh" > "$P/logs/build.log" 2>&1 || { tail -40 "$P/logs/build.log"; exit 1; }
+ grep -E 'warning|error' "$P/logs/build.log" | grep -vE '^In file' | tail -15 || true
+ cd "$P/port"
+diff --git a/tools/make_release.sh b/tools/make_release.sh
+index c00e45d..4de28ef 100644
+--- a/tools/make_release.sh
++++ b/tools/make_release.sh
+@@ -13,6 +13,7 @@ Q="$P/qemu/out/qemu-arm-${MC4_QEMU_VARIANT:-F}.stripped"
+ VER=$(grep -o 'versionName="[^"]*"' port/android/AndroidManifest.xml | head -1 | cut -d'"' -f2)
+ OUT="$P/release/$VER"
+ rm -rf "$OUT"; mkdir -p "$OUT"
++mkdir -p logs "$P/logs"
+ bash build.sh > logs/build.log 2>&1
+ (cd port && QEMU_BIN="$Q" RELEASE=1 bash android/build_apk.sh > "$P/logs/apk_release.log" 2>&1)
+ tail -2 logs/apk_release.log
+-- 
+2.34.1
+
