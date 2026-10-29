@@ -215,10 +215,6 @@ public final class MainActivity extends Activity {
                         phase = Phase.PLAYING;
                         game.setMuted(false);
 
-                        // --- IGNORA SOCIAL E PULA PROMPTS/TELA PRETA ---
-                        game.command("social 0", null);
-                        game.command("key 4 up", null);
-
                         overlay.invalidate();
                     }
                     if (menu != menuMode) {
