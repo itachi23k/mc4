@@ -58,7 +58,7 @@ public final class SettingsActivity extends Activity {
         Map<String, String> m = new LinkedHashMap<>();
         File f = file(c);
         if (!f.isFile()) return m;
-        
+
         try (BufferedReader br = new BufferedReader(new FileReader(f))) {
             String line;
             while ((line = br.readLine()) != null) {
@@ -85,8 +85,8 @@ public final class SettingsActivity extends Activity {
     static void consume(Context c, String key) {
         Map<String, String> m = load(c);
         if (m.remove(key) == null) return;
-        try { 
-            write(c, m); 
+        try {
+            write(c, m);
         } catch (IOException e) {
             Log.e(TAG, "Falha ao consumir chave: " + key, e);
         }
@@ -121,40 +121,78 @@ public final class SettingsActivity extends Activity {
         folderInfo = text("", 12, DIM, false);
         folderInfo.setPadding(0, px(6), 0, 0);
         col.addView(folderInfo);
-        
-        // Which build of the game is in the folder and what that means; filled in by showVersion().
+
         versionInfo = text("", 13, ACCENT, false);
         versionInfo.setPadding(0, px(8), 0, 0);
         versionInfo.setVisibility(View.GONE);
         col.addView(versionInfo);
 
-        col.addView(section("Gráficos"));
-        col.addView(choice("Resolução de Renderização (altura)", "RENDER_HEIGHT", 
-                new int[] { 480, 720, 1080, 1440, 2160 }, 1080, "p",
-                "1080p = Nativo. Valores maiores ativam supersampling (extrema nitidez, mas exige mais da GPU)."));
+        // ---- PRESETS (atalhos que usam só knobs que o bridge realmente implementa) ----
+        col.addView(section("Presets de Qualidade"));
+        col.addView(toggle("Nítido", "MC4_PRESET_SHARP", false,
+                "Renderiza em 1440p interno e reduz para a tela — ganho real de nitidez em qualquer painel.\n"
+              + "Só aplica se você não tiver definido a Resolução de Renderização abaixo.\n"
+              + "Pode aquecer o aparelho em cenas pesadas."));
 
-        col.addView(choice("Qualidade Gráfica", "MC4_GENERATION", new int[] { 0, 1, 3 },
-                new String[] { "Baixa", "Média", "Ultra" }, 3, "",
-                "Nível de efeitos e detalhes visuais da engine. Independe do APK. Menor = mais rápido."));
+        col.addView(toggle("Fluido", "MC4_PRESET_SMOOTH", false,
+                "3 quadros em voo, pipe GL de 2 MB e dicas de desempenho ao Android.\n"
+              + "Reduz engasgos em troca de ~1 quadro de latência.\n"
+              + "Não altera resolução."));
+
+        col.addView(toggle("Extremo", "MC4_PRESET_EXTREME", false,
+                "Combina Nítido + Fluido e força glReadPixels sem cache (lens flare preciso).\n"
+              + "Suas escolhas manuais nas seções abaixo sempre ganham do preset.\n"
+              + "Não ativa sombras/LOD/culling: isso vive dentro da engine nativa."));
+
+        // ---- GRÁFICOS ----
+        col.addView(section("Gráficos"));
+        col.addView(choice("Resolução de Renderização (altura)", "RENDER_HEIGHT",
+                new int[] { 480, 720, 1080, 1440, 2160 }, 1080, "p",
+                "1080p = Nativo. Valores maiores ativam supersampling (extrema nitidez, mas exige mais da GPU).\n"
+              + "Definir aqui cancela o supersampling do preset Nítido/Extremo."));
+
+        col.addView(choice("HUD Inset", "MC4_HUD_INSET",
+                new int[] { 0, 3, 5, 8, 12 },
+                new String[] { "Off", "3%", "5%", "8%", "12%" }, 0, "",
+                "Afasta botões e minimapa das bordas curvas/notch.\n"
+              + "A imagem 3D ocupa a tela inteira; só a camada 2D (HUD) encolhe."));
+
+        col.addView(choice("Cache de glReadPixels", "MC4_READPIXELS_EVERY",
+                new int[] { 1, 3, 6 },
+                new String[] { "Sempre real", "Padrão", "Agressivo" }, 3, "",
+                "A engine lê pixels para o lens flare. Sem cache (1) é mais preciso, mas custa mais.\n"
+              + "O preset Extremo força 1."));
 
         col.addView(choice("Limite de FPS", "FPS_LIMIT", new int[] { 30, 60, 90, 120 }, 60, " fps",
                 "Taxa de atualização da tela e limite máximo de FPS."));
         col.addView(toggle("Contador de FPS", "FPS_COUNTER", true, "Exibe um pequeno contador verde em tempo real no topo da tela."));
 
+        // ---- APARÊNCIA AVANÇADA (spoof de GPU — único knob real de qualidade da engine) ----
+        col.addView(section("Aparência Avançada"));
+        col.addView(textInput("Nome da GPU (spoof)", "MC4_GL_RENDERER", "",
+                "A engine escolhe o perfil gráfico pelo nome da GPU. Se seu aparelho for reconhecido\n"
+              + "como uma GPU antiga, digitar o nome de uma top (ex.: Adreno (TM) 740) pode liberar\n"
+              + "efeitos extras — ou rebaixar, se ela não reconhecer. Deixe vazio para usar o nome real.\n"
+              + "Equivale a colocar gpu_name.txt na pasta do jogo (o valor daqui ganha do arquivo)."));
+
+        // ---- CRÉDITOS ----
         col.addView(section("Créditos e Moedas"));
         col.addView(toggle("Créditos Infinitos", "MC4_MONEY_INFINITE", false,
                 "Exibe 9.999.999 créditos e compras não debitam. O saldo real é preservado ao desativar."));
         col.addView(amount("Definir Créditos", "MC4_MONEY_RESTORE", 9999999,
                 "Digite o valor e clique em «Jogar»: o saldo será definido para essa quantia uma vez ao carregar o perfil."));
 
+        // ---- REDE ----
         col.addView(section("Rede & Multiplayer (Wi-Fi Local)"));
         col.addView(textInput("Nome do Jogador (Nickname)", "MC4_PLAYER_NAME", "Player", "Apelido exibido nas salas de rede local Wi-Fi."));
         col.addView(toggle("Depuração Detalhada de Rede", "MC4_DEBUG_NET", true, "Registra pacotes UDP, binds e endereços de pares no arquivo de log."));
 
+        // ---- ÁUDIO ----
         col.addView(section("Áudio"));
         col.addView(choice("Buffer de Áudio", "AUDIO_LATENCY_MS", new int[] { 0, 200, 400 }, 0, " ms",
                 "0 = latência mínima do aparelho. Valores maiores se o áudio falhar em cenas pesadas."));
 
+        // ---- DESEMPENHO ----
         col.addView(section("Desempenho"));
         col.addView(choice("Quadros na Fila (In-Flight)", "MC4_GL_INFLIGHT", new int[] { 1, 2, 3 }, 2, "",
                 "Quadros preparados antecipadamente. 2 = maior fluidez, 1 = menor latência de toque."));
@@ -168,20 +206,19 @@ public final class SettingsActivity extends Activity {
         ScrollView sv = new ScrollView(this);
         sv.addView(col, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        // The buttons stay at the bottom whatever the scroll position.
         Button reset = button("Restaurar Padrão");
         reset.setOnClickListener(v -> {
             values.clear();
             Storage.deleteEverywhere(this, "settings.txt");
             recreate();
         });
-        
+
         Button saveOnly = button("Salvar");
         saveOnly.setOnClickListener(v -> saveAnd(null));
-        
+
         Button play = button("Jogar");
         play.setOnClickListener(v -> saveAnd(this::restartGame));
-        
+
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setPadding(px(16), px(4), px(16), px(8));
@@ -190,14 +227,14 @@ public final class SettingsActivity extends Activity {
             lp.setMargins(px(4), 0, px(4), 0);
             bar.addView(bt, lp);
         }
-        
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BG);
         root.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         root.addView(bar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         setContentView(root);
-        
+
         hadAccess = Storage.hasAccess(this);
         showFolder();
         if (!hadAccess) askAccess();
@@ -206,7 +243,6 @@ public final class SettingsActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
-        // Back from the system page: if the access has just been given, take the files over.
         boolean now = Storage.hasAccess(this);
         if (now && !hadAccess) moveFiles();
         hadAccess = now;
@@ -238,7 +274,6 @@ public final class SettingsActivity extends Activity {
         }, "bridge-version").start();
     }
 
-    /** Asks once per launch of this screen for access to all files; the game works without it. */
     private void askAccess() {
         if (asked) return;
         asked = true;
@@ -251,7 +286,6 @@ public final class SettingsActivity extends Activity {
                 .show();
     }
 
-    /** Creates BridgeGames/<package> and moves the files of Android/data into it (off the UI thread: it may copy). */
     private void moveFiles() {
         new Thread(() -> {
             int n = Storage.migrate(getApplicationContext(), t -> runOnUiThread(() -> folderInfo.setText(t)));
@@ -262,10 +296,6 @@ public final class SettingsActivity extends Activity {
         }, "bridge-storage").start();
     }
 
-    /**
-     * Starts the game with the saved values. CLEAR_TASK destroys a MainActivity that is still alive, so its
-     * GameProcess (which reads settings.txt when it is created) is rebuilt from scratch.
-     */
     private void restartGame() {
         startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
         finish();
@@ -282,12 +312,6 @@ public final class SettingsActivity extends Activity {
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
         if (bold) t.setTypeface(t.getTypeface(), android.graphics.Typeface.BOLD);
         return t;
-    }
-
-    private View spacer(int h) {
-        View v = new View(this);
-        v.setLayoutParams(new LinearLayout.LayoutParams(1, px(h)));
-        return v;
     }
 
     private View section(String title) {
@@ -369,7 +393,6 @@ public final class SettingsActivity extends Activity {
         return row;
     }
 
-    /** A whole number typed by hand; empty means "not set" and removes the key. */
     private View amount(String title, String key, int max, String hint) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.VERTICAL);
@@ -425,34 +448,23 @@ public final class SettingsActivity extends Activity {
         File log = Storage.find(this, "mc4.log");
         if (!log.isFile()) log = Storage.find(this, "game.log");
         if (!log.isFile()) log = new File(getFilesDir(), "mc4.log");
-        
+
         StringBuilder sb = new StringBuilder();
         if (log.isFile()) {
             try (RandomAccessFile raf = new RandomAccessFile(log, "r")) {
                 long length = raf.length();
-                // Lê no máximo os últimos 64 KB do arquivo, blindando a memória RAM
                 long readLength = Math.min(length, 64 * 1024);
                 long startPos = length - readLength;
-                
+
                 raf.seek(startPos);
                 byte[] buffer = new byte[(int) readLength];
                 raf.readFully(buffer);
-                
+
                 String tail = new String(buffer, "UTF-8");
                 String[] lines = tail.split("\n");
-                
-                // Pega no máximo as últimas 120 linhas do bloco lido
                 int startLine = Math.max(0, lines.length - 120);
-                
-                // Se não lemos desde o byte 0, a primeira linha do bloco provavelmente 
-                // foi cortada pela metade. Pulamos ela para não mostrar texto quebrado.
-                if (startPos > 0 && startLine == 0) {
-                    startLine = 1;
-                }
-                
-                for (int i = startLine; i < lines.length; i++) {
-                    sb.append(lines[i]).append('\n');
-                }
+                if (startPos > 0 && startLine == 0) startLine = 1;
+                for (int i = startLine; i < lines.length; i++) sb.append(lines[i]).append('\n');
             } catch (Exception e) {
                 sb.append("Erro ao ler log: ").append(e.getMessage());
             }
