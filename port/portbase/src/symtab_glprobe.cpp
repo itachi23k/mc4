@@ -522,15 +522,7 @@ static bool extension_present(const char *extensions, const char *wanted)
  */
 static bool force_software_decode(void)
 {
-    static int forced = -1;
-    if (forced < 0) {
-        const char *v = port_getenv("FORCE_SOFTWARE_TEXTURE_DECODE");
-        forced = 1;
-        if (forced)
-            trace("texture decode: native compressed support ignored by "
-                  "request (" PORT_ENV_PREFIX "_FORCE_SOFTWARE_TEXTURE_DECODE)");
-    }
-    return forced != 0;
+    return true;
 }
 
 static bool driver_supports_pvrtc(void)
@@ -1377,14 +1369,28 @@ extern "C" void probe_glViewport(GLint x, GLint y, GLsizei width,
                               "glViewport resolved nowhere (tables and SDL)");
 }
 
-extern "C" void probe_glScissor(GLint x, GLint y, GLsizei width, GLsizei height)
+extern "C" void probe_glScissor(GLint x, GLint y, GLsizei width,
+                                GLsizei height)
 {
-    // Se a largura ou altura for 0, o OpenGL recorta tudo e deixa a tela preta.
-    // Ignoramos o corte para permitir que o desenho apareça em toda a tela!
+    viewport_scale_autoarm();
+    using Scissor = void (*)(GLint, GLint, GLsizei, GLsizei);
+    static Scissor scissor =
+        (Scissor)resolve_gl_entry("glScissor");
+
+    // Ignora recortes com largura/altura nula para evitar tela preta
     if (width <= 0 || height <= 0) {
         return;
     }
-    
+
+    /* Every scissor is in the logical panel's space (the engine uses one
+     * viewport), so the same affine transform keeps clipped UI aligned with
+     * the scaled content. Identity when scaling is off. */
+    if (g_scale_active) {
+        x = g_dst_x + (GLint)(x * g_scale_x + 0.5f);
+        y = g_dst_y + (GLint)(y * g_scale_y + 0.5f);
+        width  = (GLsizei)(width  * g_scale_x + 0.5f);
+        height = (GLsizei)(height * g_scale_y + 0.5f);
+    }
 
     static GLint last_x = -1, last_y = -1;
     static GLsizei last_w = -1, last_h = -1;
