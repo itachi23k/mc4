@@ -1116,9 +1116,7 @@ extern "C" void probe_glCompressedTexImage2D(
               level, internalformat, width, height, image_size);
     }
 
-    if (internalformat == 0x8d64 && upload &&
-        (port_getenv("FORCE_SOFTWARE_TEXTURE_DECODE") ||
-         port_getenv("FORCE_ETC1_DECODE"))) {
+    if (internalformat == 0x8d64 && upload) {
         std::vector<unsigned char> rgba;
         if (decode_etc1(width, height, image_size, data, &rgba)) {
             upload(target, level, GL_RGBA, width, height, border,
