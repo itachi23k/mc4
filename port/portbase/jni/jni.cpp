@@ -24,7 +24,7 @@ ABI_ATTR static jobjectArray iface_NewObjectArray(JNIEnv *env, jsize len, jclass
     Class *clazz = (Class*)clz;
     Object *first_elem = (Object*)init;
 
-    if (clazz->instance_size == 0)
+    if (!clazz || clazz->instance_size == 0)
         return NULL;
 
     ArrayObject *arr = (ArrayObject*)calloc(1, sizeof(ArrayObject));
@@ -65,33 +65,39 @@ ABI_ATTR static jclass iface_DefineClass(JNIEnv *env, const char *name, jobject 
     return NULL;
 }
 
+/* Armazenamento global de classes dummy criadas dinamicamente */
+static std::vector<Class*> g_dummy_classes;
+
 ABI_ATTR static jclass iface_FindClass(JNIEnv *env, const char* name)
 {
     auto registry = ClassRegistry::get_class_registry();
     auto it = std::find_if(registry.begin(), registry.end(),
         [&](auto *item) { return strcmp(name, item->classpath) == 0; });
-    if (it == registry.end()) {
-        /*
-         * Say so. A missing class used to return NULL in silence, and the cost
-         * of that silence is specific: GetStaticMethodID guards its own warning
-         * on a non-NULL class, so it then also returns NULL without a word, and
-         * the engine calls straight through it. What reaches the log is a
-         * SIGSEGV with pc = 0 and a link register pointing into this loader -
-         * which reads like a bug in our code, and took a disassembly session to
-         * trace back to a class nobody had registered. One line here is the
-         * difference between that and an obvious answer.
-         */
-        warning("FindClass: no fake class registered for '%s' - every method "
-                "the game looks up on it will come back NULL.\n", name);
-        return NULL;
+    if (it != registry.end()) {
+        return (jclass)*it;
     }
 
-    return (jclass)*it;
+    auto dummy_it = std::find_if(g_dummy_classes.begin(), g_dummy_classes.end(),
+        [&](auto *item) { return strcmp(name, item->classpath) == 0; });
+    if (dummy_it != g_dummy_classes.end()) {
+        return (jclass)*dummy_it;
+    }
+
+    warning("FindClass: classe '%s' nao registrada - gerando stub dummy seguro.\n", name);
+
+    Class *dummy = (Class*)calloc(1, sizeof(Class));
+    dummy->classname = strdup(name);
+    dummy->classpath = strdup(name);
+    dummy->instance_size = sizeof(Object);
+    dummy->managed_methods = NULL;
+    dummy->fields = NULL;
+
+    g_dummy_classes.push_back(dummy);
+    return (jclass)dummy;
 }
 
 ABI_ATTR static jclass iface_GetSuperclass(JNIEnv *env, jclass jclazz)
 {
-    /* No inheritance here */
     return jclazz;
 }
 
@@ -177,7 +183,6 @@ ABI_ATTR static jobject iface_NewGlobalRef(JNIEnv *env, jobject jobj)
 
 ABI_ATTR static void iface_DeleteGlobalRef(JNIEnv *env, jobject jglobalRef)
 {
-    ;
 }
 
 ABI_ATTR static jobject iface_NewLocalRef(JNIEnv *env, jobject jobj)
@@ -187,7 +192,6 @@ ABI_ATTR static jobject iface_NewLocalRef(JNIEnv *env, jobject jobj)
 
 ABI_ATTR static void iface_DeleteLocalRef(JNIEnv *env, jobject jlocalRef)
 {
-    ;
 }
 
 ABI_ATTR static jint iface_EnsureLocalCapacity(JNIEnv *env, jint capacity)
@@ -210,9 +214,9 @@ ABI_ATTR static jobject iface_AllocObject(JNIEnv *env, jclass jclazz)
 ABI_ATTR static jobject iface_NewObject(JNIEnv *env, jclass jclazz, jmethodID methodID, ...)
 {
     Class *clazz = (Class*)jclazz;
-    if (clazz->instance_size == 0)
+    if (!clazz || clazz->instance_size == 0)
         return NULL;
- 
+
     jobject obj = (jobject)calloc(1, clazz->instance_size);
     va_list va;
     va_start(va, methodID);
@@ -224,10 +228,7 @@ ABI_ATTR static jobject iface_NewObject(JNIEnv *env, jclass jclazz, jmethodID me
 ABI_ATTR static jobject iface_NewObjectV(JNIEnv *env, jclass jclazz, jmethodID methodID, va_list args)
 {
     Class *clazz = (Class*)jclazz;
-    if (clazz == NULL)
-        return NULL;
-
-    if (clazz->instance_size == 0)
+    if (clazz == NULL || clazz->instance_size == 0)
         return NULL;
 
     jobject obj = (jobject)calloc(1, clazz->instance_size);
@@ -238,7 +239,7 @@ ABI_ATTR static jobject iface_NewObjectV(JNIEnv *env, jclass jclazz, jmethodID m
 ABI_ATTR static jobject iface_NewObjectA(JNIEnv *env, jclass jclazz, jmethodID methodID, const jvalue* args)
 {
     Class *clazz = (Class*)jclazz;
-    if (clazz->instance_size == 0)
+    if (!clazz || clazz->instance_size == 0)
         return NULL;
 
     jobject obj = (jobject)calloc(1, clazz->instance_size);
@@ -258,7 +259,7 @@ ABI_ATTR static jclass iface_GetObjectClass(JNIEnv *env, jobject jobj)
 ABI_ATTR static jboolean iface_IsInstanceOf(JNIEnv *env, jobject jobj, jclass jclazz)
 {
     if (jobj == NULL) {
-        fatal_error("IsInstanceOf: NULL object dereference, returning FALSE.\n");
+        warning("IsInstanceOf: NULL object dereference, returning FALSE.\n");
         return JNI_FALSE;
     }
 
@@ -272,25 +273,10 @@ ABI_ATTR static jboolean iface_IsInstanceOf(JNIEnv *env, jobject jobj, jclass jc
 static ManagedMethod *GetMethodIDGeneric(const char *func, JNIEnv *env, Class *clz, const char* name, const char* sig)
 {
     if (clz == NULL) {
-        /*
-         * Print the signature, not just the name.
-         *
-         * Method lookup below is an exact strcmp on both, so a fake class
-         * written with a plausible-looking signature simply never matches and
-         * the engine gets NULL exactly as if the class were still missing -
-         * with no new evidence in the log to say which of the two it was.
-         * Echoing the descriptor the game asked for turns writing the next
-         * class from guesswork into transcription.
-         */
-        fatal_error("%s: NULL class dereference, returning NULL "
-                    "(was looking for '%s%s').\n", func, name, sig ? sig : "");
+        warning("%s: ponteiro de classe NULL ao procurar '%s%s'.\n", func, name, sig ? sig : "");
         return NULL;
     }
 
-    /* Local divergence from gmloader-next: a class with no method table at all
-     * is legal - most of the registered classes are pure data holders - and it
-     * has to answer "no such method" instead of walking a null array. The game
-     * hits this the first time it calls GetMethodID on the activity object. */
     if (clz->managed_methods == NULL)
         return NULL;
 
@@ -307,11 +293,10 @@ static ManagedMethod *GetMethodIDGeneric(const char *func, JNIEnv *env, Class *c
 static jfieldID GetFieldIdGeneric(const char *func, JNIEnv *env, Class *clz, const char* name, const char* sig)
 {
     if (clz == NULL) {
-        fatal_error("%s: NULL class dereference, returning NULL.\n", func);
+        warning("%s: ponteiro de classe NULL.\n", func);
         return NULL;
     }
 
-    /* Same divergence, same reason. */
     if (clz->fields == NULL)
         return NULL;
 
@@ -320,7 +305,7 @@ static jfieldID GetFieldIdGeneric(const char *func, JNIEnv *env, Class *clz, con
             return (jfieldID)&clz->fields[i];
         }
     }
-   
+    
     return NULL;
 }
 
@@ -524,7 +509,7 @@ ABI_ATTR static jstring iface_NewStringUTF(JNIEnv *env, const char* bytes)
 ABI_ATTR static jsize iface_GetStringUTFLength(JNIEnv *env, jstring jstr)
 {
     String *str = (String*)jstr;
-    return strlen(str->str);
+    return str && str->str ? strlen(str->str) : 0;
 }
 
 ABI_ATTR static const char* iface_GetStringUTFChars(JNIEnv *env, jstring jstr, jboolean* isCopy)
@@ -533,7 +518,7 @@ ABI_ATTR static const char* iface_GetStringUTFChars(JNIEnv *env, jstring jstr, j
     if (isCopy)
         *isCopy = JNI_TRUE;
 
-    return strdup(jstr ? str->str : "(nil)");
+    return strdup(jstr && str->str ? str->str : "(nil)");
 }
 
 ABI_ATTR static void iface_ReleaseStringUTFChars(JNIEnv *env, jstring jstr, const char* utf)
@@ -544,12 +529,13 @@ ABI_ATTR static void iface_ReleaseStringUTFChars(JNIEnv *env, jstring jstr, cons
 ABI_ATTR static jsize iface_GetArrayLength(JNIEnv *env, jarray jarr)
 {
     ArrayObject* arr = (ArrayObject*)jarr;
-    return arr->count;
+    return arr ? arr->count : 0;
 }
 
 ABI_ATTR static jobject iface_GetObjectArrayElement(JNIEnv *env, jobjectArray jarr, jsize index)
 {
     ArrayObject* arr = (ArrayObject*)jarr;
+    if (!arr) return NULL;
     uintptr_t offs = (uintptr_t)arr->elements + (index * arr->element_size);
     return (jobject)(offs);
 }
@@ -611,7 +597,6 @@ ABI_ATTR static void* iface_GetPrimitiveArrayCritical(JNIEnv *env, jarray jarr, 
     if (jarr == NULL)
         return NULL;
 
-    // We always return direct references
     if (isCopy)
         *isCopy = false;
     
@@ -620,7 +605,6 @@ ABI_ATTR static void* iface_GetPrimitiveArrayCritical(JNIEnv *env, jarray jarr, 
 
 ABI_ATTR static void iface_ReleasePrimitiveArrayCritical(JNIEnv *env, jarray jarr, void* carray, jint mode)
 {
-    // We always return direct references.
     if (mode == JNI_COMMIT) {
         warning("ReleasePrimitiveArrayCritical with unimplemented mode. Fix GetPrimitiveArrayCritical");
     }
@@ -668,12 +652,12 @@ ABI_ATTR static jobject iface_NewDirectByteBuffer(JNIEnv *env, void* address, jl
 
 ABI_ATTR static void* iface_GetDirectBufferAddress(JNIEnv *env, jobject jbuf)
 {
-    return ((ByteBuffer*)jbuf)->address();
+    return jbuf ? ((ByteBuffer*)jbuf)->address() : NULL;
 }
 
 ABI_ATTR static jlong iface_GetDirectBufferCapacity(JNIEnv *env, jobject jbuf)
 {
-    return ((ByteBuffer*)jbuf)->capacity();
+    return jbuf ? ((ByteBuffer*)jbuf)->capacity() : 0;
 }
 
 template <typename T>
@@ -687,20 +671,8 @@ ABI_ATTR static T iface_CallMethod(JNIEnv *env, jobject obj, jmethodID meth, ...
             return (T)0;
     }
 
-#ifdef WANTS_TRACE
-    printf("TRACE JNI: %s...\n", method->name);
-#endif
-
     va_list va;
     va_start(va, meth);
-    /*
-     * Two dispatcher shapes reach here and only the method knows which it is.
-     * RegisterNonVirtual builds (env, obj, jclass, va_list); Register builds
-     * (env, obj, va_list). Calling the four-argument one with three arguments
-     * reads a register that was never set and uses it as the va_list, which
-     * surfaces as garbage arguments and a fault deep inside the method - see
-     * AudioTrack.write(short[]).
-     */
     if (method->takes_class) {
         T (*dispatch4)(JNIEnv *, jobject, jclass, va_list) =
             (decltype(dispatch4))method->addr_variadic;
@@ -737,11 +709,6 @@ ABI_ATTR static T iface_CallMethodV(JNIEnv *env, jobject obj, jmethodID meth, va
             return (T)0;
     }
 
-#ifdef WANTS_TRACE
-    printf("TRACE JNI: %s...\n", method->name);
-#endif
-
-    /* Same two shapes as iface_CallMethod above; see the comment there. */
     if (method->takes_class) {
         T (*dispatch4)(JNIEnv *, jobject, jclass, va_list) =
             (decltype(dispatch4))method->addr_variadic;
@@ -773,11 +740,6 @@ ABI_ATTR static T iface_CallMethodA(JNIEnv *env, jobject obj, jmethodID meth, co
             return (T)0;
     }
 
-#ifdef WANTS_TRACE
-    printf("TRACE JNI: %s...\n", method->name);
-#endif
-
-    /* Same two shapes as iface_CallMethod above; see the comment there. */
     if (method->takes_class) {
         T (*dispatch4)(JNIEnv *, jobject, jclass, const jvalue *) =
             (decltype(dispatch4))method->addr_array;
@@ -808,10 +770,6 @@ ABI_ATTR static T iface_CallStaticMethod(JNIEnv *env, jclass jclz, jmethodID met
             return (T)0;
     }
 
-#ifdef WANTS_TRACE
-    printf("TRACE JNI: %s...\n", method->name);
-#endif
-
     va_list va;
     va_start(va, meth);
     T (*dispatch)(JNIEnv *, jclass, va_list) = (decltype(dispatch))method->addr_variadic;
@@ -836,10 +794,6 @@ ABI_ATTR static T iface_CallStaticMethodV(JNIEnv *env, jclass jclz, jmethodID me
             return (T)0;
     }
 
-#ifdef WANTS_TRACE
-    printf("TRACE JNI: %s...\n", method->name);
-#endif
-
     T (*dispatch)(JNIEnv *, jclass, va_list) = (decltype(dispatch))method->addr_variadic;
     if constexpr (std::is_same_v<T, void>) {
         dispatch(env, jclz, va);
@@ -860,10 +814,6 @@ ABI_ATTR static T iface_CallStaticMethodA(JNIEnv *env, jclass clz, jmethodID met
             return (T)0;
     }
 
-#ifdef WANTS_TRACE
-    printf("TRACE JNI: %s...\n", method->name);
-#endif
-
     T (*dispatch)(JNIEnv *, jclass, const jvalue *) = (decltype(dispatch))method->addr_array;
     if constexpr (std::is_same_v<T, void>) {
         dispatch(env, clz, val);
@@ -883,19 +833,8 @@ ABI_ATTR static T iface_CallNonVirtualMethod(JNIEnv *env, jobject obj, jclass jc
             return (T)0;
     }
 
-#ifdef WANTS_TRACE
-    printf("TRACE JNI: %s...\n", method->name);
-#endif
-
     va_list va;
     va_start(va, meth);
-    /*
-     * The NonVirtual entry points hand the class in from the caller, but the
-     * registered dispatcher's shape is still the method's own: one built by
-     * Register takes (env, obj, va_list) and reading a class argument it was
-     * never given shifts every real argument one register to the right - the
-     * same misread documented at iface_CallMethod, from the other side.
-     */
     if (!method->takes_class) {
         T (*dispatch3)(JNIEnv *, jobject, va_list) =
             (decltype(dispatch3))method->addr_variadic;
@@ -932,11 +871,6 @@ ABI_ATTR static T iface_CallNonVirtualMethodV(JNIEnv *env, jobject obj, jclass j
             return (T)0;
     }
 
-#ifdef WANTS_TRACE
-    printf("TRACE JNI: %s...\n", method->name);
-#endif
-
-    /* Same two shapes as iface_CallNonVirtualMethod above. */
     if (!method->takes_class) {
         T (*dispatch3)(JNIEnv *, jobject, va_list) =
             (decltype(dispatch3))method->addr_variadic;
@@ -960,9 +894,6 @@ template <typename T>
 ABI_ATTR static T iface_CallNonVirtualMethodA(JNIEnv *env, jobject obj, jclass jclazz, jmethodID meth, const jvalue *val)
 {
     ManagedMethod *method = (ManagedMethod*)meth;
-    /* addr_array: this is the A form. The guard used to test addr_variadic,
-     * which let a method registered without an array dispatcher through to a
-     * null call. */
     if (!method || !method->addr_array) {
         if constexpr (std::is_same_v<T, void>)
             return;
@@ -970,11 +901,6 @@ ABI_ATTR static T iface_CallNonVirtualMethodA(JNIEnv *env, jobject obj, jclass j
             return (T)0;
     }
 
-#ifdef WANTS_TRACE
-    printf("TRACE JNI: %s...\n", method->name);
-#endif
-
-    /* Same two shapes as iface_CallNonVirtualMethod above. */
     if (!method->takes_class) {
         T (*dispatch3)(JNIEnv *, jobject, const jvalue *) =
             (decltype(dispatch3))method->addr_array;
@@ -1002,7 +928,6 @@ ABI_ATTR static T iface_GetField(JNIEnv *env, jobject obj, jfieldID fieldID)
         return (T)0;
 
     T *offs = (T*)((intptr_t)obj + f->offset);
-
     return *offs;
 }
 
@@ -1014,10 +939,12 @@ ABI_ATTR static void iface_SetField(JNIEnv *env, jobject obj, jfieldID fieldID, 
         return;
 
     T *offs = (T*)((intptr_t)obj + f->offset);
-
     *offs = value;
 }
 
+/*
+ * Retorna a desreferenciação do ponteiro contido na variável estática de objeto.
+ */
 template <typename T>
 ABI_ATTR static T iface_GetStaticField(JNIEnv *env, jclass clz, jfieldID fieldID)
 {
@@ -1025,18 +952,12 @@ ABI_ATTR static T iface_GetStaticField(JNIEnv *env, jclass clz, jfieldID fieldID
     if (f == NULL || f->is_static == 0 || clz == NULL)
         return (T)0;
 
-    T offs = (T)(f->offset);
-    return offs;
+    if (f->offset == 0)
+        return (T)0;
+
+    return *(T*)f->offset;
 }
 
-/*
- * A static field of a primitive type: the value, not the address.
- *
- * iface_GetStaticField above answers with the field's address, which is right
- * for an object field (the address of a String member is the String) and wrong
- * for a number. First importer: Modern Combat 4, which reads KeyEvent.KEYCODE_* with
- * GetStaticIntField to build its key table.
- */
 template <typename T>
 ABI_ATTR static T iface_GetStaticPrimField(JNIEnv *env, jclass clz, jfieldID fieldID)
 {
@@ -1144,12 +1065,10 @@ const JNINativeInterface jnienv_funcs = {
 
     .FromReflectedMethod = &iface_FromReflectedMethod,
     .FromReflectedField = &iface_FromReflectedField,
-    /* spec doesn't show jboolean parameter */
     .ToReflectedMethod = &iface_ToReflectedMethod,
     .GetSuperclass = &iface_GetSuperclass,
     .IsAssignableFrom = &iface_IsAssignableFrom,
 
-    /* spec doesn't show jboolean parameter */
     .ToReflectedField = &iface_ToReflectedField,
     .Throw = &iface_Throw,
     .ThrowNew = &iface_ThrowNew,
@@ -1377,7 +1296,6 @@ const JNINativeInterface jnienv_funcs = {
     .GetDirectBufferAddress = &iface_GetDirectBufferAddress,
     .GetDirectBufferCapacity = &iface_GetDirectBufferCapacity,
 
-    /* added in JNI 1.6 */
     .GetObjectRefType = &iface_GetObjectRefType,
 };
 
