@@ -62,16 +62,9 @@
 } while(0)
 
 #ifdef DEBUG
-    #define WARN_STUB do { \
-        fprintf(stderr, "[STUB JNI] %s em %s:%d\n", __FUNCTION__, __FILE__, __LINE__); \
-        fflush(stderr); \
-    } while(0)
+    #define WARN_STUB (void)(fprintf(stderr, "[STUB JNI] %s em %s:%d\n", __FUNCTION__, __FILE__, __LINE__), fflush(stderr));
 #else
-    // Em builds normais, ainda logamos o stub invocado para evitar tela preta silenciosa
-    #define WARN_STUB do { \
-        fprintf(stderr, "[STUB UNIMPLEMENTED] Chamada para '%s'\n", __FUNCTION__); \
-        fflush(stderr); \
-    } while(0)
+    #define WARN_STUB (void)(fprintf(stderr, "[STUB UNIMPLEMENTED] Chamada para '%s'\n", __FUNCTION__), fflush(stderr));
 #endif
 
 // Auxiliares de macros e utilitários de memória
