@@ -23,13 +23,13 @@ template <typename T> ABI_ATTR static T iface_CallNonVirtualMethodA(JNIEnv *env,
 ABI_ATTR static void dummy_method_executor(JNIEnv *env, jclass clz, ...) {}
 
 static ManagedMethod g_dummy_method = {
+    .clazz = NULL,
     .name = "dummy_stub",
     .signature = "()V",
     .addr_variadic = (void*)&dummy_method_executor,
     .addr_array = (void*)&dummy_method_executor,
     .is_static_method = true,
-    .takes_class = true,
-    .clazz = NULL
+    .takes_class = true
 };
 
 ABI_ATTR static jobjectArray iface_NewObjectArray(JNIEnv *env, jsize len, jclass clz, jobject init)
