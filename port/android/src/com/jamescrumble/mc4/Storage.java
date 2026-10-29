@@ -9,6 +9,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
 import android.provider.Settings;
+import android.util.Log;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -38,6 +39,7 @@ import java.util.List;
  */
 final class Storage {
     static final String ROOT_NAME = "BridgeGames";
+    private static final String TAG = "MC4_Storage";
 
     interface Progress { void status(String text); }
 
@@ -137,7 +139,12 @@ final class Storage {
     }
 
     static void deleteEverywhere(Context c, String name) {
-        for (File dir : sources(c)) new File(dir, name).delete();
+        for (File dir : sources(c)) {
+            File f = new File(dir, name);
+            if (f.exists() && !f.delete()) {
+                Log.w(TAG, "Failed to delete: " + f.getAbsolutePath());
+            }
+        }
     }
 
     /** Both folders for a message to the player. */
@@ -173,7 +180,11 @@ final class Storage {
                 int n = 0;
                 File[] list = src.listFiles();
                 if (list != null) for (File f : list) n += moveInto(f, new File(dst, f.getName()), p);
-                src.delete();
+                
+                // Avoid logging normal directory deletion during migration
+                if (!src.delete()) {
+                   // Optional: log if a directory fails to delete (often due to being non-empty)
+                }
                 return n;
             }
             if (!src.isFile()) return 0;
@@ -181,29 +192,40 @@ final class Storage {
                 // Same size: it is the same file, the legacy copy is not needed. Smaller than the original: an earlier
                 // move was cut short, the original is still whole, so copy it again. Anything else is left alone.
                 if (dst.length() == src.length()) {
-                    src.delete();
+                    if (!src.delete()) Log.w(TAG, "Failed to delete source file after matching size: " + src);
                     return 0;
                 }
                 if (dst.length() > src.length()) return 0;
             }
             if (p != null) p.status("Movendo para " + dst.getParentFile().getPath() + "…\n" + src.getName());
+            
             // Copy under a temporary name and rename in the same folder: the final name never holds half a file.
             File tmp = new File(dst.getPath() + ".part");
-            tmp.delete();
+            if (tmp.exists() && !tmp.delete()) {
+                 Log.w(TAG, "Failed to clear temp file: " + tmp);
+            }
+            
             copyFile(src, tmp);
+            
             if (tmp.length() != src.length()) {
-                tmp.delete();
+                if (!tmp.delete()) Log.w(TAG, "Failed to delete incomplete temp file: " + tmp);
                 return 0;
             }
-            dst.delete();
+            
+            if (dst.exists() && !dst.delete()) {
+                Log.w(TAG, "Failed to overwrite destination: " + dst);
+            }
+            
             if (!tmp.renameTo(dst)) {
-                tmp.delete();
+                if (!tmp.delete()) Log.w(TAG, "Failed to delete temp file after rename failure: " + tmp);
                 return 0;
             }
+            
             dst.setLastModified(src.lastModified());
-            src.delete();
+            if (!src.delete()) Log.w(TAG, "Failed to delete original file after successful move: " + src);
             return 1;
         } catch (IOException e) {
+            Log.e(TAG, "Error moving " + src + " to " + dst, e);
             return 0;
         }
     }
@@ -225,7 +247,9 @@ final class Storage {
             String[] have = dst.list();
             if (have == null || have.length == 0) copyNewer(privateSave, dst);
             copyNewer(dst, privateSave);
-        } catch (IOException ignored) { }
+        } catch (IOException e) {
+            Log.e(TAG, "Error syncing saves between private and shared folders", e);
+        }
         return dst;
     }
 
@@ -250,7 +274,8 @@ final class Storage {
 
     static void copyFile(File src, File dst) throws IOException {
         try (InputStream in = new FileInputStream(src); OutputStream out = new FileOutputStream(dst)) {
-            byte[] buf = new byte[1 << 16];
+            // Aumentado o buffer de 64KB (1<<16) para 128KB (1<<17) para otimizar transferências I/O em armazenamentos modernos
+            byte[] buf = new byte[1 << 17];
             for (int r; (r = in.read(buf)) > 0; ) out.write(buf, 0, r);
         }
     }
