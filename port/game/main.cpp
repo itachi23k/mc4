@@ -93,8 +93,8 @@ static const char *kNativeLibDir = "lib/armeabi-v7a";
 /* The R36S panel. The engine takes its resolution from the resize call below
  * and this port never changes it afterwards. The Android wrapper overrides it
  * (<PREFIX>_WIDTH / _HEIGHT) to match the phone's aspect ratio. */
-static int kWidth  = 640;
-static int kHeight = 480;
+static int kWidth  = 1280;
+static int kHeight = 720;
 
 /* ---------------------------------------------------------- the module */
 
