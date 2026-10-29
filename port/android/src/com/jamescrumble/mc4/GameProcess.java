@@ -392,6 +392,7 @@ final class GameProcess {
         appendLog("[wrapper] profile folder " + saveFolder);
         // OpenGL ES calls are executed by the app on the GPU (GlBridge); nothing renders inside qemu.
         env.put("MC4_GL_BRIDGE", "1");
+        env.put("MC4_FORCE_SOFTWARE_TEXTURE_DECODE", "1");
         env.put("MC4_GL_CMD", glCmd.getPath());
         env.put("MC4_GL_REPLY", glReply.getPath());
         env.put("MC4_LANG", java.util.Locale.getDefault().getLanguage());
