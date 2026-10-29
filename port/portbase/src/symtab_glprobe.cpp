@@ -1364,22 +1364,19 @@ extern "C" void probe_glViewport(GLint x, GLint y, GLsizei width,
                               "glViewport resolved nowhere (tables and SDL)");
 }
 
-extern "C" void probe_glScissor(GLint x, GLint y, GLsizei width,
-                                GLsizei height)
+extern "C" void probe_glScissor(GLint x, GLint y, GLsizei width, GLsizei height)
 {
     viewport_scale_autoarm();
     using Scissor = void (*)(GLint, GLint, GLsizei, GLsizei);
     static Scissor scissor =
         (Scissor)resolve_gl_entry("glScissor");
 
-    // Ignora recortes com largura/altura nula para evitar tela preta
-    if (width <= 0 || height <= 0) {
+    // Se o recorte for de 1x1 pixel ou menor que 32px, ignoramos o corte
+    // para evitar que 99% da tela fique preta!
+    if (width <= 32 || height <= 32) {
         return;
     }
 
-    /* Every scissor is in the logical panel's space (the engine uses one
-     * viewport), so the same affine transform keeps clipped UI aligned with
-     * the scaled content. Identity when scaling is off. */
     if (g_scale_active) {
         x = g_dst_x + (GLint)(x * g_scale_x + 0.5f);
         y = g_dst_y + (GLint)(y * g_scale_y + 0.5f);
