@@ -149,6 +149,7 @@ final class GlBridge implements Runnable {
 
     /** The surface to present on (null while the app is in the background). */
     void setSurface(Surface s) {
+        log.log("setSurface called with: " + s + (s != null ? " (valid=" + s.isValid() + ")" : ""));
         synchronized (lock) {
             pendingSurface = s;
             surfaceDirty = true;
@@ -830,21 +831,28 @@ final class GlBridge implements Runnable {
     // ---------------------------------------------------------------- presentation
 
     private void attach(Surface s) {
+        log.log("attach called with surface: " + s + (s != null ? " (valid=" + s.isValid() + ")" : ""));
         if (window != EGL14.EGL_NO_SURFACE) {
             EGL14.eglMakeCurrent(dpy, pbuf, pbuf, ctx);
             EGL14.eglDestroySurface(dpy, window);
             window = EGL14.EGL_NO_SURFACE;
         }
-        if (s != null && s.isValid()) {
-            EGLSurface w = EGL14.eglCreateWindowSurface(dpy, cfg, s, new int[] { EGL14.EGL_NONE }, 0);
-            if (w != EGL14.EGL_NO_SURFACE && EGL14.eglMakeCurrent(dpy, w, w, ctx)) {
-                window = w;
-                EGL14.eglSwapInterval(dpy, 1);
-                log.log("presenting on a window surface");
+        if (s != null) {
+            if (s.isValid()) {
+                EGLSurface w = EGL14.eglCreateWindowSurface(dpy, cfg, s, new int[] { EGL14.EGL_NONE }, 0);
+                if (w != EGL14.EGL_NO_SURFACE && EGL14.eglMakeCurrent(dpy, w, w, ctx)) {
+                    window = w;
+                    EGL14.eglSwapInterval(dpy, 1);
+                    log.log("presenting on a window surface SUCCESS");
+                } else {
+                    log.log("eglCreateWindowSurface failed: 0x" + Integer.toHexString(EGL14.eglGetError()));
+                    EGL14.eglMakeCurrent(dpy, pbuf, pbuf, ctx);
+                }
             } else {
-                log.log("eglCreateWindowSurface failed: 0x" + Integer.toHexString(EGL14.eglGetError()));
-                EGL14.eglMakeCurrent(dpy, pbuf, pbuf, ctx);
+                log.log("attach: surface is NOT valid yet");
             }
+        } else {
+            log.log("attach: surface is null");
         }
     }
 

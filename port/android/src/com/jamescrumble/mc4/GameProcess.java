@@ -393,9 +393,7 @@ final class GameProcess {
         // OpenGL ES calls are executed by the app on the GPU (GlBridge); nothing renders inside qemu.
         env.put("MC4_GL_BRIDGE", "1");
         env.put("MC4_SCALE", "stretch");
-        env.put("MC4_FORCE_SOFTWARE_TEXTURE_DECODE", "1");
-        env.put("MC4_SKIP_COMPOSITE_QUAD", "1");
-        env.put("MC4_GL_CMD", glCmd.getPath());
+                env.put("MC4_GL_CMD", glCmd.getPath());
         env.put("MC4_GL_REPLY", glReply.getPath());
         env.put("MC4_LANG", java.util.Locale.getDefault().getLanguage());
         // The engine has a frame limiter of its own, fixed at 60; it follows the menu's frame limit.

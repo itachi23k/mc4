@@ -133,7 +133,7 @@ public final class MainActivity extends Activity {
         SurfaceHolder holder = glView.getHolder();
         holder.setFormat(PixelFormat.OPAQUE);
         // The game renders at its own size and the compositor scales it to the panel.
-        holder.setFixedSize(game.renderWidth(), game.renderHeight());
+        // holder.setFixedSize(game.renderWidth(), game.renderHeight());
         holder.addCallback(new SurfaceHolder.Callback() {
             @Override public void surfaceCreated(SurfaceHolder h) { setRate(h.getSurface()); game.gl().setSurface(h.getSurface()); }
             @Override public void surfaceChanged(SurfaceHolder h, int format, int w, int hgt) { setRate(h.getSurface()); game.gl().setSurface(h.getSurface()); }
@@ -408,6 +408,7 @@ public final class MainActivity extends Activity {
         @Override protected void onDraw(Canvas c) {
             Phase p = phase;
             if (p == Phase.PLAYING) {
+                c.drawColor(android.graphics.Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR);
                 // In phone mode the engine draws its own controls.
                 if (!menuMode && (!game.touchMode() || padOn)) drawButtons(c);
                 if (showFps) drawFps(c);
