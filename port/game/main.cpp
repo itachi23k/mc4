@@ -199,6 +199,14 @@ void mc4_present(void)
     if (n <= 3)
         trace("frame presented #%ld on thread %ld%s", n, (long)syscall(SYS_gettid),
               syscall(SYS_gettid) == getpid() ? " (main)" : "");
+
+    if (gl_bridge_enabled()) {
+        int w = kWidth, h = kHeight;
+        emulator_control_after_draw(n, w, h);
+        gl_bridge_swap();
+        return;
+    }
+
     if (!g_window)
         return;
 
@@ -208,10 +216,7 @@ void mc4_present(void)
     android_input_autopilot_sample(n);
     android_cursor_draw(w, h);
     emulator_control_after_draw(n, w, h);
-    if (gl_bridge_enabled())
-        gl_bridge_swap();
-    else
-        SDL_GL_SwapWindow(g_window);
+    SDL_GL_SwapWindow(g_window);
 }
 
 /* ------------------------------------------------------------------ main */
