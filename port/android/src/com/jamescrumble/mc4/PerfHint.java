@@ -4,7 +4,10 @@ import android.content.Context;
 import android.os.Build;
 import android.os.PerformanceHintManager;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -30,6 +33,13 @@ final class PerfHint {
     private volatile int pid;
     private long lastFrame;
     private int lastThreadCount;
+    
+    // Controle de Thread para evitar vazamentos
+    private volatile boolean active = false;
+
+    // Métodos refletidos cacheados antecipadamente
+    private java.lang.reflect.Method sendHint;
+    private boolean sendHintMissing;
 
     PerfHint(Context ctx, Log log) {
         this.ctx = ctx;
@@ -38,8 +48,11 @@ final class PerfHint {
 
     /** The pid of a java.lang.Process: Android's toString() names it ("Process[pid=123, ...]"). */
     static int pidOf(Process p) {
+        if (p == null) return -1;
         Matcher m = Pattern.compile("pid=(\\d+)").matcher(String.valueOf(p));
-        if (m.find()) return Integer.parseInt(m.group(1));
+        if (m.find()) {
+            try { return Integer.parseInt(m.group(1)); } catch (NumberFormatException ignored) {}
+        }
         try {
             java.lang.reflect.Field f = p.getClass().getDeclaredField("pid");
             f.setAccessible(true);
@@ -49,12 +62,18 @@ final class PerfHint {
         }
     }
 
+    public void stop() {
+        active = false;
+        if (session != null && Build.VERSION.SDK_INT >= 31) {
+            try {
+                ((PerformanceHintManager.Session) session).close();
+            } catch (Exception ignored) {}
+            session = null;
+        }
+    }
+
     /**
-     * hints == false only remembers the pid for cpuLine(). On the OnePlus 13s the session did the opposite
-     * of what it is for: qemu's main thread, alone of all threads, ended up with uclamp.max 171 of 1024 and
-     * sat at the lowest clock while fully loaded.
-     */
-    /**
+     * hints == false only remembers the pid for cpuLine().
      * The target has to be the rate the game is aiming for: with a fixed 60 fps target and a higher limit the
      * system reads the shorter frames as headroom and clocks the cores down.
      */
@@ -69,6 +88,8 @@ final class PerfHint {
             log.log("perf hint: no pid for " + p);
             return;
         }
+        
+        active = true;
         Thread t = new Thread(this::watch, "mc4-perfhint");
         t.setDaemon(true);
         t.start();
@@ -77,7 +98,7 @@ final class PerfHint {
     /** qemu starts its guest threads over the first seconds; the session follows the thread list. */
     private void watch() {
         try {
-            while (new File("/proc/" + pid).exists()) {
+            while (active && new File("/proc/" + pid).exists()) {
                 int[] tids = threads();
                 if (tids.length > 0 && tids.length != lastThreadCount) {
                     lastThreadCount = tids.length;
@@ -86,16 +107,21 @@ final class PerfHint {
                 Thread.sleep(session == null ? 1000 : 5000);
             }
         } catch (InterruptedException ignored) {
+        } finally {
+            active = false; // Garante encerramento da thread
         }
     }
 
     private int[] threads() {
-        String[] names = new File("/proc/" + pid + "/task").list();
+        File taskDir = new File("/proc/" + pid + "/task");
+        String[] names = taskDir.list();
         if (names == null) return new int[0];
-        List<Integer> l = new ArrayList<>();
+        
+        List<Integer> l = new ArrayList<>(names.length);
         for (String n : names) {
             try { l.add(Integer.parseInt(n)); } catch (NumberFormatException ignored) { }
         }
+        
         int[] a = new int[l.size()];
         for (int i = 0; i < a.length; i++) a[i] = l.get(i);
         return a;
@@ -115,17 +141,28 @@ final class PerfHint {
             } else {
                 if (s != null) ((PerformanceHintManager.Session) s).close();
                 session = m.createHintSession(tids, targetNs);
-                // Android 15: do not trade this session's speed for power (API 35, so by reflection).
-                if (session != null && Build.VERSION.SDK_INT >= 35) {
+                s = session;
+                
+                // Cache reflection methods early (Off main thread)
+                if (s != null && Build.VERSION.SDK_INT >= 33 && !sendHintMissing && sendHint == null) {
                     try {
-                        session.getClass().getMethod("setPreferPowerEfficiency", boolean.class).invoke(session, false);
+                        sendHint = s.getClass().getMethod("sendHint", int.class);
+                    } catch (Exception e) {
+                        sendHintMissing = true;
+                    }
+                }
+
+                // Android 15: do not trade this session's speed for power.
+                if (s != null && Build.VERSION.SDK_INT >= 35) {
+                    try {
+                        s.getClass().getMethod("setPreferPowerEfficiency", boolean.class).invoke(s, false);
                     } catch (Exception e) {
                         log.log("perf hint: setPreferPowerEfficiency: " + e);
                     }
                 }
             }
             log.log("perf hint: session over " + tids.length + " qemu threads: " + (session != null ? "ok" : "refused") + ", target " + targetNs + " ns"
-                    + ", preferred rate " + m.getPreferredUpdateRateNanos() + " ns");
+                    + (m != null ? ", preferred rate " + m.getPreferredUpdateRateNanos() + " ns" : ""));
         } catch (RuntimeException e) {
             log.log("perf hint: " + e);
         }
@@ -140,12 +177,23 @@ final class PerfHint {
         if (p <= 0) return "";
         try {
             String stat = readFirstLine("/proc/" + p + "/task/" + p + "/stat");
-            // Field 39 (processor) counted after the ")" that closes the command name.
-            String[] f = stat.substring(stat.lastIndexOf(')') + 2).split(" ");
+            if (stat.isEmpty()) return "cpu ?";
+            
+            int closingParen = stat.lastIndexOf(')');
+            if (closingParen < 0 || closingParen + 2 >= stat.length()) return "cpu ?";
+            
+            String[] f = stat.substring(closingParen + 2).split(" ");
+            if (f.length < 37) return "cpu ?"; // Field 39 is index 36 after split
+            
             int cpu = Integer.parseInt(f[36]);
             String base = "/sys/devices/system/cpu/cpu" + cpu + "/cpufreq/";
-            long cur = Long.parseLong(readFirstLine(base + "scaling_cur_freq").trim()) / 1000;
-            long max = Long.parseLong(readFirstLine(base + "scaling_max_freq").trim()) / 1000;
+            
+            String curFreqStr = readFirstLine(base + "scaling_cur_freq").trim();
+            String maxFreqStr = readFirstLine(base + "scaling_max_freq").trim();
+            
+            long cur = curFreqStr.isEmpty() ? 0 : Long.parseLong(curFreqStr) / 1000;
+            long max = maxFreqStr.isEmpty() ? 0 : Long.parseLong(maxFreqStr) / 1000;
+            
             return "cpu" + cpu + " " + cur + "/" + max + " MHz" + uclampMax(p);
         } catch (Exception e) {
             return "cpu ?";
@@ -154,33 +202,47 @@ final class PerfHint {
 
     /** " uclamp N" when the scheduler caps what the main thread's load may ask of the clock (1024 = no cap). */
     private static String uclampMax(int p) {
-        try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader("/proc/" + p + "/task/" + p + "/sched"))) {
+        try (BufferedReader r = new BufferedReader(new FileReader("/proc/" + p + "/task/" + p + "/sched"))) {
             String l;
             while ((l = r.readLine()) != null) {
-                if (l.startsWith("effective uclamp.max")) return " uclamp " + l.substring(l.indexOf(':') + 1).trim();
+                if (l.startsWith("effective uclamp.max")) {
+                    int colonIdx = l.indexOf(':');
+                    if (colonIdx > 0 && colonIdx + 1 < l.length()) {
+                        return " uclamp " + l.substring(colonIdx + 1).trim();
+                    }
+                }
             }
         } catch (Exception ignored) {
         }
         return "";
     }
 
-    private static String readFirstLine(String path) throws java.io.IOException {
-        try (java.io.BufferedReader r = new java.io.BufferedReader(new java.io.FileReader(path))) {
+    private static String readFirstLine(String path) {
+        File file = new File(path);
+        if (!file.exists() || !file.canRead()) return "";
+        try (BufferedReader r = new BufferedReader(new FileReader(file))) {
             String l = r.readLine();
             return l == null ? "" : l;
+        } catch (IOException e) {
+            return "";
         }
     }
+
+    private long lastLoadUp;
 
     /** Called once per presented frame. */
     void frame() {
         long now = System.nanoTime();
         long d = now - lastFrame;
         lastFrame = now;
+        
         Object s = session;
         if (s == null || Build.VERSION.SDK_INT < 31 || d <= 0 || d > 1_000_000_000L) return;
+        
         try {
             PerformanceHintManager.Session ss = (PerformanceHintManager.Session) s;
             ss.reportActualWorkDuration(d);
+            
             // Frames well over target: say the load just went up (API 33), at most twice a second.
             if (Build.VERSION.SDK_INT >= 33 && d > targetNs + targetNs / 4 && now - lastLoadUp > 500_000_000L) {
                 lastLoadUp = now;
@@ -190,19 +252,15 @@ final class PerfHint {
         }
     }
 
-    private long lastLoadUp;
-    private java.lang.reflect.Method sendHint;
-    private boolean sendHintMissing;
-
     /** Session.sendHint(CPU_LOAD_UP): not in the SDK stubs this is built against, so by reflection. */
     private void loadUp(PerformanceHintManager.Session s) {
-        if (sendHintMissing) return;
+        if (sendHintMissing || sendHint == null) return;
         try {
-            if (sendHint == null) sendHint = s.getClass().getMethod("sendHint", int.class);
+            // Usa o cache criado em attach() para evitar overhead no loop de frame
             sendHint.invoke(s, 0 /* Session.CPU_LOAD_UP */);
         } catch (Exception e) {
             sendHintMissing = true;
-            log.log("perf hint: sendHint: " + e);
+            log.log("perf hint: sendHint failed during frame: " + e);
         }
     }
 }
