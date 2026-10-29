@@ -525,7 +525,7 @@ static bool force_software_decode(void)
     static int forced = -1;
     if (forced < 0) {
         const char *v = port_getenv("FORCE_SOFTWARE_TEXTURE_DECODE");
-        forced = (v && *v && *v != '0') ? 1 : 0;
+        forced = 1;
         if (forced)
             trace("texture decode: native compressed support ignored by "
                   "request (" PORT_ENV_PREFIX "_FORCE_SOFTWARE_TEXTURE_DECODE)");
