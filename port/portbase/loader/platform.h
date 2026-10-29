@@ -2,8 +2,10 @@
 #define __PLATFORM_H__
 
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 
-// Elf attributes
+// Definições de estruturas e tipos ELF dependentes da arquitetura (32 vs 64 bits)
 #if defined(__x86_64) || defined(__aarch64__)
     #define Elf_Addr Elf64_Addr
     #define Elf_Ehdr Elf64_Ehdr
@@ -16,8 +18,8 @@
     #define Elf_Relr Elf64_Xword
     #define Elf_Word Elf64_Word
     #define Elf_Sword Elf64_Sxword
-    #define ELF_R_TYPE(X)	ELF64_R_TYPE(X)
-    #define ELF_R_SYM(X)	ELF64_R_SYM(X)
+    #define ELF_R_TYPE(X)    ELF64_R_TYPE(X)
+    #define ELF_R_SYM(X)     ELF64_R_SYM(X)
     #define REL_DYN ".rela.dyn"
     #define REL_PLT ".rela.plt"
 #else
@@ -32,57 +34,69 @@
     #define Elf_Relr Elf32_Word
     #define Elf_Word Elf32_Word
     #define Elf_Sword Elf32_Sword
-    #define ELF_R_TYPE(X)	ELF32_R_TYPE(X)
-    #define ELF_R_SYM(X)	ELF32_R_SYM(X)
+    #define ELF_R_TYPE(X)    ELF32_R_TYPE(X)
+    #define ELF_R_SYM(X)     ELF32_R_SYM(X)
     #define REL_DYN ".rel.dyn"
     #define REL_PLT ".rel.plt"
 #endif
 
-
-// Definitions for ABI attributes
-// Flags bridges and native library functions as the correct ABI, e.g. for
-// compiling with HardFP toolchains and drivers, since armv7a android libraries are
-// compiled to the SoftFP ABI.
-#if __ARM_PCS_VFP==1
-#define ABI_ATTR __attribute__((pcs("aapcs")))
+// Atributos de ABI para chamadas nativas em plataformas ARM (HardFP vs SoftFP)
+#if __ARM_PCS_VFP == 1
+    #define ABI_ATTR __attribute__((pcs("aapcs")))
 #else
-#define NO_ABI_ATTR
-#define ABI_ATTR
+    #define NO_ABI_ATTR
+    #define ABI_ATTR
 #endif
 
 #define ARCH_ARMV6 (defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) || defined(__ARM_ARCH_6K__) || defined(__ARM_ARCH_6Z__) || defined(__ARM_ARCH_6ZK__))
 
+// Sistema de logs e rastreamento de stubs para diagnóstico de runtime
+#define fatal_error(msg, ...) do { \
+    fprintf(stderr, "[FATAL] %s:%d: " msg "\n", __FILE__, __LINE__, ##__VA_ARGS__); \
+    fflush(stderr); \
+} while(0)
+
+#define warning(msg, ...) do { \
+    fprintf(stderr, "[WARN] " msg, ##__VA_ARGS__); \
+    fflush(stderr); \
+} while(0)
+
 #ifdef DEBUG
-    #define fatal_error(msg, ...) { fprintf(stderr, "%s:%d: " msg, __FILE__, __LINE__, ##__VA_ARGS__); }
-    #define warning(msg, ...) { fprintf(stderr, msg, ##__VA_ARGS__); }
-    #define WARN_STUB fprintf(stderr, "Warning, stubbed function \"%s\".\n", __FUNCTION__);
+    #define WARN_STUB do { \
+        fprintf(stderr, "[STUB JNI] %s em %s:%d\n", __FUNCTION__, __FILE__, __LINE__); \
+        fflush(stderr); \
+    } while(0)
 #else
-    #define fatal_error(msg, ...) { fprintf(stderr, "%s:%d: " msg, __FILE__, __LINE__, ##__VA_ARGS__); }
-    #define warning(msg, ...) { fprintf(stderr, msg, ##__VA_ARGS__); }
-    #define WARN_STUB
+    // Em builds normais, ainda logamos o stub invocado para evitar tela preta silenciosa
+    #define WARN_STUB do { \
+        fprintf(stderr, "[STUB UNIMPLEMENTED] Chamada para '%s'\n", __FUNCTION__); \
+        fflush(stderr); \
+    } while(0)
 #endif
 
+// Auxiliares de macros e utilitários de memória
 #ifdef __builtin_types_compatible_p
-#define __must_be_array(a) \
- BUILD_BUG_ON_ZERO(__builtin_types_compatible_p(typeof(a), typeof(&a[0])))
-
-#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]) + __must_be_array(arr))
+    #define __must_be_array(a) \
+        BUILD_BUG_ON_ZERO(__builtin_types_compatible_p(typeof(a), typeof(&a[0])))
+    #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]) + __must_be_array(arr))
 #else
-#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+    #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
 #ifndef PATH_MAX
-#define PATH_MAX 4096
+    #define PATH_MAX 4096
 #endif
 
 #define MIN_FREE_MEM (48 * 1024 * 1024)
 
+// Quirks de compatibilidade BIONIC (32-bit off_t)
 #if __LONG_WIDTH__ == 32
-typedef int bionic_off_t; // 32bit off_t type (BIONIC quirk - see https://cs.android.com/android/platform/superproject/+/master:bionic/docs/32-bit-abi.md)
+    typedef int bionic_off_t;
 #else
-typedef long bionic_off_t;
+    typedef long bionic_off_t;
 #endif
 
+// Tipos auxiliares para divisões da runtime aeabi (ARM EABI)
 typedef struct { int32_t quot; int32_t rem; } __aeabi_idivmod_result_t;
 typedef struct { uint32_t quot; uint32_t rem; } __aeabi_uidivmod_result_t;
 typedef struct { int64_t quot; int64_t rem; } __aeabi_ldivmod_result_t;
