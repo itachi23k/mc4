@@ -385,12 +385,7 @@ extern "C" void probe_glClear(GLbitfield mask)
  */
 static bool skip_composite_quad_enabled(void)
 {
-    static int on = -1;
-    if (on < 0) {
-        const char *v = port_getenv("SKIP_COMPOSITE_QUAD");
-        on = (v && *v && *v != '0') ? 1 : 0;
-    }
-    return on != 0;
+    return true;
 }
 
 static bool is_opaque_fullscreen_quad(GLenum mode, GLsizei count)
