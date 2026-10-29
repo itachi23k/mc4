@@ -19,6 +19,19 @@ static JavaVM *jvm_global = NULL;
 template <typename T> ABI_ATTR static T iface_CallNonVirtualMethodV(JNIEnv *env, jobject obj, jclass jclazz, jmethodID meth, va_list va);
 template <typename T> ABI_ATTR static T iface_CallNonVirtualMethodA(JNIEnv *env, jobject obj, jclass jclazz, jmethodID meth, const jvalue *val);
 
+/* Stub de método genérico para suprir chamadas a métodos inexistentes/social APIs */
+ABI_ATTR static void dummy_method_executor(JNIEnv *env, jclass clz, ...) {}
+
+static ManagedMethod g_dummy_method = {
+    .name = "dummy_stub",
+    .signature = "()V",
+    .addr_variadic = (void*)&dummy_method_executor,
+    .addr_array = (void*)&dummy_method_executor,
+    .is_static_method = true,
+    .takes_class = true,
+    .clazz = NULL
+};
+
 ABI_ATTR static jobjectArray iface_NewObjectArray(JNIEnv *env, jsize len, jclass clz, jobject init)
 {
     Class *clazz = (Class*)clz;
@@ -65,7 +78,6 @@ ABI_ATTR static jclass iface_DefineClass(JNIEnv *env, const char *name, jobject 
     return NULL;
 }
 
-/* Armazenamento global de classes dummy criadas dinamicamente */
 static std::vector<Class*> g_dummy_classes;
 
 ABI_ATTR static jclass iface_FindClass(JNIEnv *env, const char* name)
@@ -317,8 +329,10 @@ ABI_ATTR static jmethodID iface_GetMethodID(JNIEnv *env, jclass clazz, const cha
         return (jmethodID)method;
     }
 
-    if (clz)
-        warning("Class %s does not have method %s%s.\n", clz->classname, name, sig);
+    if (clz) {
+        warning("Class %s: método '%s%s' não encontrado. Devolvendo stub seguro.\n", clz->classname, name, sig);
+        return (jmethodID)&g_dummy_method;
+    }
 
     return NULL;
 }
@@ -344,8 +358,10 @@ ABI_ATTR static jmethodID iface_GetStaticMethodID(JNIEnv *env, jclass clazz, con
         return (jmethodID)method;
     }
 
-    if (clz)
-        warning("Class %s does not have static method %s%s.\n", clz->classname, name, sig);
+    if (clz) {
+        warning("Class %s: método estático '%s%s' não encontrado. Devolvendo stub seguro.\n", clz->classname, name, sig);
+        return (jmethodID)&g_dummy_method;
+    }
 
     return NULL;
 }
@@ -664,7 +680,7 @@ template <typename T>
 ABI_ATTR static T iface_CallMethod(JNIEnv *env, jobject obj, jmethodID meth, ...)
 {
     ManagedMethod *method = (ManagedMethod*)meth;
-    if (!method || !method->addr_variadic) {
+    if (!method || method == &g_dummy_method || !method->addr_variadic) {
         if constexpr (std::is_same_v<T, void>)
             return;
         else
@@ -702,7 +718,7 @@ template <typename T>
 ABI_ATTR static T iface_CallMethodV(JNIEnv *env, jobject obj, jmethodID meth, va_list va)
 {
     ManagedMethod *method = (ManagedMethod*)meth;
-    if (!method || !method->addr_variadic) {
+    if (!method || method == &g_dummy_method || !method->addr_variadic) {
         if constexpr (std::is_same_v<T, void>)
             return;
         else
@@ -733,7 +749,7 @@ template <typename T>
 ABI_ATTR static T iface_CallMethodA(JNIEnv *env, jobject obj, jmethodID meth, const jvalue *val)
 {
     ManagedMethod *method = (ManagedMethod*)meth;
-    if (!method || !method->addr_array) {
+    if (!method || method == &g_dummy_method || !method->addr_array) {
         if constexpr (std::is_same_v<T, void>)
             return;
         else
@@ -763,7 +779,7 @@ template <typename T>
 ABI_ATTR static T iface_CallStaticMethod(JNIEnv *env, jclass jclz, jmethodID meth, ...)
 {
     ManagedMethod *method = (ManagedMethod*)meth;
-    if (!method || !method->addr_variadic) {
+    if (!method || method == &g_dummy_method || !method->addr_variadic) {
         if constexpr (std::is_same_v<T, void>)
             return;
         else
@@ -787,7 +803,7 @@ template <typename T>
 ABI_ATTR static T iface_CallStaticMethodV(JNIEnv *env, jclass jclz, jmethodID meth, va_list va)
 {
     ManagedMethod *method = (ManagedMethod*)meth;
-    if (!method || !method->addr_variadic) {
+    if (!method || method == &g_dummy_method || !method->addr_variadic) {
         if constexpr (std::is_same_v<T, void>)
             return;
         else
@@ -807,7 +823,7 @@ template <typename T>
 ABI_ATTR static T iface_CallStaticMethodA(JNIEnv *env, jclass clz, jmethodID meth, const jvalue *val)
 {
     ManagedMethod *method = (ManagedMethod*)meth;
-    if (!method || !method->addr_array) {
+    if (!method || method == &g_dummy_method || !method->addr_array) {
         if constexpr (std::is_same_v<T, void>)
             return;
         else
@@ -826,7 +842,7 @@ template <typename T>
 ABI_ATTR static T iface_CallNonVirtualMethod(JNIEnv *env, jobject obj, jclass jclazz, jmethodID meth, ...)
 {
     ManagedMethod *method = (ManagedMethod*)meth;
-    if (!method || !method->addr_variadic) {
+    if (!method || method == &g_dummy_method || !method->addr_variadic) {
         if constexpr (std::is_same_v<T, void>)
             return;
         else
@@ -864,7 +880,7 @@ template <typename T>
 ABI_ATTR static T iface_CallNonVirtualMethodV(JNIEnv *env, jobject obj, jclass jclazz, jmethodID meth, va_list va)
 {
     ManagedMethod *method = (ManagedMethod*)meth;
-    if (!method || !method->addr_variadic) {
+    if (!method || method == &g_dummy_method || !method->addr_variadic) {
         if constexpr (std::is_same_v<T, void>)
             return;
         else
@@ -894,7 +910,7 @@ template <typename T>
 ABI_ATTR static T iface_CallNonVirtualMethodA(JNIEnv *env, jobject obj, jclass jclazz, jmethodID meth, const jvalue *val)
 {
     ManagedMethod *method = (ManagedMethod*)meth;
-    if (!method || !method->addr_array) {
+    if (!method || method == &g_dummy_method || !method->addr_array) {
         if constexpr (std::is_same_v<T, void>)
             return;
         else
@@ -942,9 +958,6 @@ ABI_ATTR static void iface_SetField(JNIEnv *env, jobject obj, jfieldID fieldID, 
     *offs = value;
 }
 
-/*
- * Retorna a desreferenciação do ponteiro contido na variável estática de objeto.
- */
 template <typename T>
 ABI_ATTR static T iface_GetStaticField(JNIEnv *env, jclass clz, jfieldID fieldID)
 {
