@@ -72,9 +72,11 @@ final class GlBridge implements Runnable {
     private Surface pendingSurface;
     private boolean surfaceDirty;
 
+    // Resolução de renderização personalizável (Default é ignorado se setRenderSize for chamado)
+    private volatile int renderWidth = 2400;
+    private volatile int renderHeight = 1080;
+
     private FileDescriptor cmd, rep;
-    // Everything read from the command pipe and not yet executed: in[rpos, wpos). pay is a view of the
-    // same memory, narrowed to the payload of the message being executed.
     private ByteBuffer in = ByteBuffer.allocateDirect(2 << 20).order(ByteOrder.LITTLE_ENDIAN);
     private ByteBuffer pay = in.duplicate().order(ByteOrder.LITTLE_ENDIAN);
     private int rpos, wpos;
@@ -97,10 +99,8 @@ final class GlBridge implements Runnable {
     private long cmds, bytes, lastReport, lastSwaps, glErrors, execErrors, busyNanos;
     private final long[] opCounts = new long[256], opBytes = new long[256];
 
-    /** The busiest ops of the last report interval, by count and by bytes, then reset. */
     private String opReport(double frames) {
         StringBuilder sb = new StringBuilder();
-        // Synchronous queries stall the whole pipeline, so they are listed whatever their count.
         sb.append(" | sync/frame:");
         for (int op = GlOps.OP_Q_GET_STRING; op <= GlOps.OP_Q_READ_PIXELS; op++) {
             if (opCounts[op] > 0) sb.append(String.format(Locale.US, " %d=%.2f", op, opCounts[op] / Math.max(1.0, frames)));
@@ -135,6 +135,17 @@ final class GlBridge implements Runnable {
         this.telemetry = telemetry;
     }
 
+    /**
+     * Define dinamicamente as dimensões do viewport de renderização baseado nas métricas do MainActivity
+     */
+    void setRenderSize(int width, int height) {
+        if (width > 0 && height > 0) {
+            this.renderWidth = width;
+            this.renderHeight = height;
+            log.log(String.format(Locale.US, "GlBridge render size atualizado para: %dx%d", width, height));
+        }
+    }
+
     long swaps() { return swaps; }
 
     void start() {
@@ -147,7 +158,6 @@ final class GlBridge implements Runnable {
         alive = false;
     }
 
-    /** The surface to present on (null while the app is in the background). */
     void setSurface(Surface s) {
         log.log("setSurface called with: " + s + (s != null ? " (valid=" + s.isValid() + ")" : ""));
         synchronized (lock) {
@@ -155,8 +165,6 @@ final class GlBridge implements Runnable {
             surfaceDirty = true;
         }
     }
-
-    // ---------------------------------------------------------------- thread
 
     @Override public void run() {
         try {
@@ -179,7 +187,6 @@ final class GlBridge implements Runnable {
         int[] ver = new int[2];
         if (!EGL14.eglInitialize(dpy, ver, 0, ver, 1)) throw new IllegalStateException("eglInitialize failed");
 
-        // The game never uses destination alpha on screen; an opaque surface avoids see-through output.
         int[][] wanted = {
             { 8, 8, 8, 0, 24, 8 }, { 8, 8, 8, 8, 24, 8 }, { 8, 8, 8, 0, 16, 0 }, { 8, 8, 8, 8, 16, 0 },
         };
@@ -214,16 +221,9 @@ final class GlBridge implements Runnable {
     }
 
     private static final String NON_CONST_INIT = "GL_EXT_shader_non_constant_global_initializers";
-    /** Does the driver accept uniforms in global initializers once a shader asks for it with #extension? */
     private boolean nonConstInit;
 
-    /**
-     * Older Adreno drivers took "vec4 c = SomeUniform;" at global scope, which GLSL ES 1.00 forbids and the current
-     * ones refuse (1.2.1a's ProfileCommon shaders do it with ShadowColor, so every one of them failed to compile).
-     * The extension lifts the rule; it has to come before the first token, right after a #version line if there is one.
-     */
     private String fixShaderSource(String src) {
-        // 1.2.1a's ProfileCommon_FS ends with "gl_FragColor.1 = 1.0;": a typo for the alpha channel that old drivers let by.
         src = src.replace("gl_FragColor.1 ", "gl_FragColor.a ");
         if (!nonConstInit) return src;
         String line = "#extension " + NON_CONST_INIT + " : enable\n";
@@ -252,12 +252,6 @@ final class GlBridge implements Runnable {
         try { if (rep != null) Os.close(rep); } catch (ErrnoException ignored) { }
     }
 
-    /**
-     * The guest writes its commands in batches of up to a megabyte, and a busy scene is 80 000 commands
-     * a second. Reading them one at a time (a header, then a payload) was two system calls for each,
-     * and the guest's main thread stood in write() waiting for this thread to get through them. So the
-     * pipe is emptied in whole chunks and the messages are executed where they lie.
-     */
     private void loop() throws ErrnoException, InterruptedIOException {
         while (alive) {
             if (!need(8)) return;
@@ -287,13 +281,10 @@ final class GlBridge implements Runnable {
         }
     }
 
-    /** Makes in[rpos, rpos + n) available, reading as much as the pipe has; false when asked to stop. */
     private boolean need(int n) throws ErrnoException, InterruptedIOException {
         if (wpos - rpos >= n) return true;
         if (rpos == wpos) rpos = wpos = 0;
         if (rpos + n > in.capacity()) {
-            // The message does not fit behind what is already there: move the unread tail to the front,
-            // into a larger buffer if even that is not enough.
             ByteBuffer to = in;
             if (n > in.capacity()) {
                 int c = in.capacity();
@@ -340,8 +331,6 @@ final class GlBridge implements Runnable {
         return true;
     }
 
-    // ---------------------------------------------------------------- replies
-
     private void reply(byte[] data, int n) {
         int total = 4 + n;
         if (out.capacity() < total) out = ByteBuffer.allocateDirect(Math.max(total, out.capacity() * 2)).order(ByteOrder.LITTLE_ENDIAN);
@@ -367,7 +356,6 @@ final class GlBridge implements Runnable {
 
     private void replyString(String s) { reply(s == null ? new byte[0] : s.getBytes(LATIN1)); }
 
-    /** Tells the guest the frame has been presented, so it can start the one after next. */
     private void ackFrame() {
         out.clear();
         out.putInt(-1);
@@ -379,11 +367,8 @@ final class GlBridge implements Runnable {
         }
     }
 
-    // ---------------------------------------------------------------- decoding helpers
-
     private int i() { return pay.getInt(); }
 
-    /** The next n bytes as a direct buffer (null when n < 0), consuming them padded to 4. */
     private ByteBuffer data(int n) {
         if (n < 0) return null;
         ByteBuffer d = pay.slice().order(ByteOrder.LITTLE_ENDIAN);
@@ -393,8 +378,6 @@ final class GlBridge implements Runnable {
     }
 
     private static int[] one() { return new int[1]; }
-
-    // ---------------------------------------------------------------- dispatch
 
     private void dispatch(int op, int plen) {
         ByteBuffer b = pay;
@@ -524,7 +507,6 @@ final class GlBridge implements Runnable {
 
     private void uniformV() {
         int kind = i(), loc = i(), count = i(), transpose = i();
-        // 0-7: 1-4 components, float and int alternating; 8-10: the 4x4, 2x2 and 3x3 float matrices.
         int per = kind == 8 ? 16 : kind == 9 ? 4 : kind == 10 ? 9 : (kind / 2) + 1;
         int n = count * per;
         boolean isFloat = kind >= 8 || (kind & 1) == 0;
@@ -551,12 +533,6 @@ final class GlBridge implements Runnable {
         }
     }
 
-    /**
-     * Uploads the client arrays of one draw into scratch buffers and points the attributes at them.
-     * A block is one run of client memory with every attribute that reads from it (interleaved arrays
-     * arrive once, not once per attribute); it starts at firstVertex, and the buffer leaves that much
-     * room in front so vertex numbers keep their meaning.
-     */
     private void clientBlocks(int nclient, int firstVertex) {
         for (int k = 0; k < nclient; k++) {
             int nattr = i(), stride = i(), len = i();
@@ -618,20 +594,18 @@ final class GlBridge implements Runnable {
         else GLES30.glInvalidateFramebuffer(target, num, att, 0);
     }
 
-    // ---------------------------------------------------------------- queries
-
     private static int intCount(int pname) {
         switch (pname) {
-            case 0x0BA2: case 0x0C10: return 4;            // viewport, scissor box
-            case 0x0D3A: case 0x846D: case 0x846E: return 2; // max viewport dims, aliased ranges
+            case 0x0BA2: case 0x0C10: return 4;
+            case 0x0D3A: case 0x846D: case 0x846E: return 2;
             default: return 1;
         }
     }
 
     private static int floatCount(int pname) {
         switch (pname) {
-            case 0x0C22: case 0x8005: return 4;            // clear colour, blend colour
-            case 0x0B70: case 0x846D: case 0x846E: return 2; // depth range, aliased ranges
+            case 0x0C22: case 0x8005: return 4;
+            case 0x0B70: case 0x846D: case 0x846E: return 2;
             default: return 1;
         }
     }
@@ -657,7 +631,6 @@ final class GlBridge implements Runnable {
         return row * (h - 1) + w * bpp;
     }
 
-    /** Handles the synchronous ops; every one of them must answer, or the guest would wait forever. */
     private boolean query(int op) {
         switch (op) {
             case GlOps.OP_Q_GET_STRING:
@@ -697,7 +670,7 @@ final class GlBridge implements Runnable {
                 int pname = i();
                 int[] v = new int[64];
                 int n = intCount(pname);
-                if (pname == 0x86A3) { // GL_COMPRESSED_TEXTURE_FORMATS
+                if (pname == 0x86A3) {
                     int[] num = one();
                     GLES30.glGetIntegerv(0x86A2, num, 0);
                     n = Math.min(num[0], v.length);
@@ -794,7 +767,6 @@ final class GlBridge implements Runnable {
         }
     }
 
-    /** Guest-side op (portbase/src/gl_bridge.cpp): everything about a linked program, in one reply. */
     static final int OP_Q_PROGRAM_INFO = 250;
 
     private void programInfo(int prog) {
@@ -828,8 +800,6 @@ final class GlBridge implements Runnable {
         reply(bo.toByteArray());
     }
 
-    // ---------------------------------------------------------------- presentation
-
     private void attach(Surface s) {
         log.log("attach called with surface: " + s + (s != null ? " (valid=" + s.isValid() + ")" : ""));
         if (window != EGL14.EGL_NO_SURFACE) {
@@ -843,7 +813,9 @@ final class GlBridge implements Runnable {
                 if (w != EGL14.EGL_NO_SURFACE && EGL14.eglMakeCurrent(dpy, w, w, ctx)) {
                     window = w;
                     EGL14.eglSwapInterval(dpy, 1);
-                    log.log("presenting on a window surface SUCCESS");
+                    
+                    GLES30.glViewport(0, 0, renderWidth, renderHeight);
+                    log.log("presenting on a window surface SUCCESS (" + renderWidth + "x" + renderHeight + ")");
                 } else {
                     log.log("eglCreateWindowSurface failed: 0x" + Integer.toHexString(EGL14.eglGetError()));
                     EGL14.eglMakeCurrent(dpy, pbuf, pbuf, ctx);
@@ -856,13 +828,10 @@ final class GlBridge implements Runnable {
         }
     }
 
-    /** FPS_LIMIT: 0 = none. Frames are held back to this period; the game is paced by the frame acks. */
     private volatile long frameNs;
     private long nextFrameAt;
 
     void setFrameLimit(int fps) {
-        // 6% short of the period: when the panel runs at the same rate vsync does the pacing, and this only
-        // holds the game back when the panel is faster than the limit (30 fps on a 60 or 120 Hz mode).
         frameNs = fps > 0 ? 940_000_000L / fps : 0;
     }
 
@@ -890,6 +859,8 @@ final class GlBridge implements Runnable {
         if (dirty) attach(s);
 
         if (window != EGL14.EGL_NO_SURFACE) {
+            GLES30.glViewport(0, 0, renderWidth, renderHeight);
+
             pace();
             if (!EGL14.eglSwapBuffers(dpy, window)) {
                 log.log("eglSwapBuffers failed: 0x" + Integer.toHexString(EGL14.eglGetError()));
@@ -898,7 +869,6 @@ final class GlBridge implements Runnable {
                 window = EGL14.EGL_NO_SURFACE;
             }
         } else {
-            // Nothing to present on (app in the background): do not let the game spin.
             try { Thread.sleep(16); } catch (InterruptedException ignored) { }
         }
         swaps++;
