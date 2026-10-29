@@ -198,7 +198,7 @@ public final class MainActivity extends Activity {
                 int[] s = game.readStatus();
                 if (s != null) {
                     boolean menu = s[1] == 1;
-                    if (p == Phase.LOADING && game.gl().swaps() > 0 && (menu || s[0] > 900)) {
+                    if (p == Phase.LOADING && (menu || s[0] > 300)) {
                         phase = Phase.PLAYING;
                         game.setMuted(false);
                         overlay.invalidate();
