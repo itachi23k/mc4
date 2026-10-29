@@ -188,7 +188,7 @@ final class GlBridge implements Runnable {
         if (!EGL14.eglInitialize(dpy, ver, 0, ver, 1)) throw new IllegalStateException("eglInitialize failed");
 
         int[][] wanted = {
-            { 8, 8, 8, 0, 24, 8 }, { 8, 8, 8, 8, 24, 8 }, { 8, 8, 8, 0, 16, 0 }, { 8, 8, 8, 8, 16, 0 },
+            { 8, 8, 8, 8, 24, 8 }, { 8, 8, 8, 0, 24, 8 }, { 8, 8, 8, 0, 16, 0 }, { 8, 8, 8, 8, 16, 0 },
         };
         EGLConfig[] configs = new EGLConfig[1];
         int[] n = new int[1];
