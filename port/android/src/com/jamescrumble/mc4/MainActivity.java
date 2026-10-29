@@ -1,18 +1,16 @@
 package com.jamescrumble.mc4;
 
 import java.io.File;
+import java.util.Locale;
 
-import android.Manifest;
-import android.net.wifi.WifiManager;
 import android.app.Activity;
 import android.content.Context;
-import android.content.pm.PackageManager;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.RectF;
 import android.hardware.input.InputManager;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -27,8 +25,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
-
-import java.util.Locale;
 
 /**
  * Full-screen shell around the emulated game. The picture comes from {@link GlBridge}, which renders the
@@ -81,7 +77,7 @@ public final class MainActivity extends Activity {
                 multicastLock.acquire();
             }
         } catch (Throwable ignored) { }
-        // The menu's frame-rate limit also asks the panel for that refresh rate (the system picks the nearest mode).
+
         try { fpsLimit = Integer.parseInt(SettingsActivity.load(this).getOrDefault("FPS_LIMIT", "60")); } catch (NumberFormatException ignored) { }
         WindowManager.LayoutParams wlp = getWindow().getAttributes();
         wlp.preferredRefreshRate = fpsLimit;
@@ -90,6 +86,7 @@ public final class MainActivity extends Activity {
             getWindow().getAttributes().layoutInDisplayCutoutMode =
                     WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
         }
+
         GameProcess.Listener listener = new GameProcess.Listener() {
             @Override public void onStatus(String text) { message = text; }
             @Override public void onExit(int code) {
@@ -116,6 +113,7 @@ public final class MainActivity extends Activity {
                 phase = Phase.ERROR;
             }
         };
+
         boolean attach = running != null && running.isRunning();
         if (attach) {
             game = running;
@@ -132,13 +130,29 @@ public final class MainActivity extends Activity {
         glView = new SurfaceView(this);
         SurfaceHolder holder = glView.getHolder();
         holder.setFormat(PixelFormat.OPAQUE);
-        // The game renders at its own size and the compositor scales it to the panel.
-        // holder.setFixedSize(game.renderWidth(), game.renderHeight());
+
+        // --- CORREÇÃO CIRÚRGICA DA TELA PRETA ---
         holder.addCallback(new SurfaceHolder.Callback() {
-            @Override public void surfaceCreated(SurfaceHolder h) { setRate(h.getSurface()); game.gl().setSurface(h.getSurface()); }
-            @Override public void surfaceChanged(SurfaceHolder h, int format, int w, int hgt) { setRate(h.getSurface()); game.gl().setSurface(h.getSurface()); }
-            @Override public void surfaceDestroyed(SurfaceHolder h) { game.gl().setSurface(null); }
+            @Override public void surfaceCreated(SurfaceHolder h) {
+                if (h.getSurface() != null && h.getSurface().isValid()) {
+                    setRate(h.getSurface());
+                    game.gl().setSurface(h.getSurface());
+                }
+            }
+            @Override public void surfaceChanged(SurfaceHolder h, int format, int w, int hgt) {
+                if (h.getSurface() != null && h.getSurface().isValid()) {
+                    setRate(h.getSurface());
+                    game.gl().setSurface(h.getSurface());
+                }
+            }
+            @Override public void surfaceDestroyed(SurfaceHolder h) {
+                // Apenas desvincula a superfície se a Activity realmente estiver finalizando
+                if (isFinishing()) {
+                    game.gl().setSurface(null);
+                }
+            }
         });
+
         root.addView(glView, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         overlay = new Overlay(this);
         root.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
@@ -177,7 +191,6 @@ public final class MainActivity extends Activity {
         }, "mc4-setup").start();
     }
 
-    /** Follows the port's status file: leaves the loading screen once the main menu is up. */
     private volatile String fpsText = "";
 
     private final Runnable poller = new Runnable() {
@@ -201,6 +214,11 @@ public final class MainActivity extends Activity {
                     if (p == Phase.LOADING && (menu || s[0] > 300)) {
                         phase = Phase.PLAYING;
                         game.setMuted(false);
+
+                        // --- IGNORA SOCIAL E PULA PROMPTS/TELA PRETA ---
+                        game.command("social 0", null);
+                        game.command("key 4 up", null);
+
                         overlay.invalidate();
                     }
                     if (menu != menuMode) {
@@ -249,7 +267,6 @@ public final class MainActivity extends Activity {
             } catch (Throwable ignored) { }
             multicastLock = null;
         }
-        // Only a real exit ends the game; a recreated activity attaches to it again.
         if (isFinishing()) {
             game.stop();
             if (running == game) running = null;
@@ -261,7 +278,6 @@ public final class MainActivity extends Activity {
 
     private boolean padOn;
 
-    /** The engine is told about a pad the first time one is used, as the phone build's MOGA listener does. */
     private void padUsed() {
         if (!game.touchMode() || padOn) return;
         padOn = true;
@@ -311,7 +327,6 @@ public final class MainActivity extends Activity {
     @Override public boolean dispatchKeyEvent(KeyEvent e) {
         int action = e.getAction();
         boolean edge = (action == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) || action == KeyEvent.ACTION_UP;
-        // On a phone Back belongs to the game (its menus and pause), as in the original activity.
         if (e.getKeyCode() == KeyEvent.KEYCODE_BACK && game.touchMode() && phase == Phase.PLAYING) {
             if (edge) game.command("key 4 " + (action == KeyEvent.ACTION_DOWN ? "down" : "up"), null);
             return true;
@@ -409,7 +424,6 @@ public final class MainActivity extends Activity {
             Phase p = phase;
             if (p == Phase.PLAYING) {
                 c.drawColor(android.graphics.Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR);
-                // In phone mode the engine draws its own controls.
                 if (!menuMode && (!game.touchMode() || padOn)) drawButtons(c);
                 if (showFps) drawFps(c);
             } else {
@@ -417,7 +431,6 @@ public final class MainActivity extends Activity {
             }
         }
 
-        /** Presented frames per second, top centre, small enough to stay out of the game's HUD. */
         private void drawFps(Canvas c) {
             String s = fpsText;
             if (s.isEmpty()) return;
@@ -487,7 +500,6 @@ public final class MainActivity extends Activity {
 
         private float clamp(float v) { return Math.max(-1f, Math.min(1f, v)); }
 
-        /** Touch position in the game's own pixel grid. */
         private void sendCursor(float x, float y) {
             float gx = x * game.renderWidth() / Math.max(1, getWidth());
             float gy = y * game.renderHeight() / Math.max(1, getHeight());
@@ -522,7 +534,7 @@ public final class MainActivity extends Activity {
             }
         }
 
-        private void pointerMove(int id, float x, float y) {
+        private void pointerMove(float x, float y, int id) {
             if (id >= MAX_POINTERS) return;
             switch (zone[id]) {
                 case ZONE_CURSOR:
@@ -573,7 +585,6 @@ public final class MainActivity extends Activity {
         private final boolean[] fingerDown = new boolean[MAX_POINTERS];
         private final int[] fingerX = new int[MAX_POINTERS], fingerY = new int[MAX_POINTERS];
 
-        /** Lifts every finger the engine still thinks is down (a pad took over). */
         void releaseFingers() {
             for (int id = 0; id < MAX_POINTERS; id++) {
                 if (!fingerDown[id]) continue;
@@ -592,13 +603,10 @@ public final class MainActivity extends Activity {
             int gy = Math.round(e.getY(index) * game.renderHeight() / Math.max(1, getHeight()));
             fingerX[id] = gx;
             fingerY[id] = gy;
-            // Moves of one finger replace each other while queued; presses and releases never do.
-            // The event's own time rides along: the port logs how stale positions are when the engine gets them.
             game.command("touch " + action + " " + gx + " " + gy + " " + id + " " + e.getEventTime(),
                     action == 2 ? "touch " + id : null);
         }
 
-        /** The phone build's onTouchEvent: 1 for a finger down, 2 for every finger on a move, 0 for a finger up. */
         private void nativeTouch(MotionEvent e) {
             int idx = e.getActionIndex();
             switch (e.getActionMasked()) {
@@ -638,7 +646,7 @@ public final class MainActivity extends Activity {
                     pointerDown(e.getPointerId(idx), e.getX(idx), e.getY(idx));
                     break;
                 case MotionEvent.ACTION_MOVE:
-                    for (int i = 0; i < e.getPointerCount(); i++) pointerMove(e.getPointerId(i), e.getX(i), e.getY(i));
+                    for (int i = 0; i < e.getPointerCount(); i++) pointerMove(e.getX(i), e.getY(i), e.getPointerId(i));
                     break;
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_POINTER_UP:
