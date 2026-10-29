@@ -10,6 +10,7 @@ import android.text.Editable;
 import android.text.InputFilter;
 import android.text.InputType;
 import android.text.TextWatcher;
+import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -23,11 +24,12 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.io.ByteArrayOutputStream;
+import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -38,6 +40,7 @@ import java.util.Map;
  * so that it always begins with the values shown here).
  */
 public final class SettingsActivity extends Activity {
+    private static final String TAG = "MC4_Settings";
     private static final int BG = Color.rgb(18, 22, 26), FG = Color.rgb(230, 235, 238), DIM = Color.rgb(140, 150, 156),
             ACCENT = Color.rgb(128, 203, 196);
 
@@ -55,22 +58,24 @@ public final class SettingsActivity extends Activity {
         Map<String, String> m = new LinkedHashMap<>();
         File f = file(c);
         if (!f.isFile()) return m;
-        try (FileInputStream in = new FileInputStream(f)) {
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] b = new byte[2048];
-            int n;
-            while ((n = in.read(b)) > 0) out.write(b, 0, n);
-            for (String line : out.toString("UTF-8").split("\n")) {
+        
+        try (BufferedReader br = new BufferedReader(new FileReader(f))) {
+            String line;
+            while ((line = br.readLine()) != null) {
                 int eq = line.indexOf('=');
                 if (eq > 0) m.put(line.substring(0, eq).trim(), line.substring(eq + 1).trim());
             }
-        } catch (IOException ignored) { }
+        } catch (IOException e) {
+            Log.e(TAG, "Erro ao carregar configurações", e);
+        }
         return m;
     }
 
     private static void write(Context c, Map<String, String> m) throws IOException {
         StringBuilder sb = new StringBuilder();
-        for (Map.Entry<String, String> e : m.entrySet()) sb.append(e.getKey()).append('=').append(e.getValue()).append('\n');
+        for (Map.Entry<String, String> e : m.entrySet()) {
+            sb.append(e.getKey()).append('=').append(e.getValue()).append('\n');
+        }
         try (FileOutputStream out = new FileOutputStream(new File(Storage.mainDir(c), "settings.txt"))) {
             out.write(sb.toString().getBytes("UTF-8"));
         }
@@ -80,17 +85,26 @@ public final class SettingsActivity extends Activity {
     static void consume(Context c, String key) {
         Map<String, String> m = load(c);
         if (m.remove(key) == null) return;
-        try { write(c, m); } catch (IOException ignored) { }
+        try { 
+            write(c, m); 
+        } catch (IOException e) {
+            Log.e(TAG, "Falha ao consumir chave: " + key, e);
+        }
     }
 
-    private boolean save() {
-        try {
-            write(this, values);
-            return true;
-        } catch (IOException e) {
-            Toast.makeText(this, "Não foi possível salvar: " + e.getMessage(), Toast.LENGTH_LONG).show();
-            return false;
-        }
+    /** Save logic handled in a background thread to prevent UI lockup (ANR). */
+    private void saveAnd(Runnable onDone) {
+        new Thread(() -> {
+            try {
+                write(this, values);
+                runOnUiThread(() -> {
+                    if (onDone == null) Toast.makeText(this, "Configurações Salvas", Toast.LENGTH_SHORT).show();
+                    if (onDone != null) onDone.run();
+                });
+            } catch (IOException e) {
+                runOnUiThread(() -> Toast.makeText(this, "Não foi possível salvar: " + e.getMessage(), Toast.LENGTH_LONG).show());
+            }
+        }, "mc4-settings-save").start();
     }
 
     @Override protected void onCreate(Bundle state) {
@@ -107,6 +121,7 @@ public final class SettingsActivity extends Activity {
         folderInfo = text("", 12, DIM, false);
         folderInfo.setPadding(0, px(6), 0, 0);
         col.addView(folderInfo);
+        
         // Which build of the game is in the folder and what that means; filled in by showVersion().
         versionInfo = text("", 13, ACCENT, false);
         versionInfo.setPadding(0, px(8), 0, 0);
@@ -114,8 +129,9 @@ public final class SettingsActivity extends Activity {
         col.addView(versionInfo);
 
         col.addView(section("Gráficos"));
-        col.addView(choice("Resolução de Renderização (altura)", "RENDER_HEIGHT", new int[] { 480, 540, 720 }, 720, "p",
-                "Largura calculada proporcionalmente. Menor = mais rápido/leve."));
+        col.addView(choice("Resolução de Renderização (altura)", "RENDER_HEIGHT", 
+                new int[] { 480, 720, 1080, 1440, 2160 }, 1080, "p",
+                "1080p = Nativo. Valores maiores ativam supersampling (extrema nitidez, mas exige mais da GPU)."));
 
         col.addView(choice("Qualidade Gráfica", "MC4_GENERATION", new int[] { 0, 1, 3 },
                 new String[] { "Baixa", "Média", "Ultra" }, 3, "",
@@ -159,12 +175,13 @@ public final class SettingsActivity extends Activity {
             Storage.deleteEverywhere(this, "settings.txt");
             recreate();
         });
+        
         Button saveOnly = button("Salvar");
-        saveOnly.setOnClickListener(v -> {
-            if (save()) Toast.makeText(this, "Configurações Salvas", Toast.LENGTH_SHORT).show();
-        });
+        saveOnly.setOnClickListener(v -> saveAnd(null));
+        
         Button play = button("Jogar");
-        play.setOnClickListener(v -> { if (save()) restartGame(); });
+        play.setOnClickListener(v -> saveAnd(this::restartGame));
+        
         LinearLayout bar = new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setPadding(px(16), px(4), px(16), px(8));
@@ -173,12 +190,14 @@ public final class SettingsActivity extends Activity {
             lp.setMargins(px(4), 0, px(4), 0);
             bar.addView(bt, lp);
         }
+        
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BG);
         root.addView(sv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         root.addView(bar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         setContentView(root);
+        
         hadAccess = Storage.hasAccess(this);
         showFolder();
         if (!hadAccess) askAccess();
@@ -406,17 +425,32 @@ public final class SettingsActivity extends Activity {
         File log = Storage.find(this, "mc4.log");
         if (!log.isFile()) log = Storage.find(this, "game.log");
         if (!log.isFile()) log = new File(getFilesDir(), "mc4.log");
+        
         StringBuilder sb = new StringBuilder();
         if (log.isFile()) {
-            try (FileInputStream in = new FileInputStream(log)) {
-                ByteArrayOutputStream out = new ByteArrayOutputStream();
-                byte[] b = new byte[8192];
-                int n;
-                while ((n = in.read(b)) > 0) out.write(b, 0, n);
-                String full = out.toString("UTF-8");
-                String[] lines = full.split("\n");
-                int start = Math.max(0, lines.length - 120);
-                for (int i = start; i < lines.length; i++) {
+            try (RandomAccessFile raf = new RandomAccessFile(log, "r")) {
+                long length = raf.length();
+                // Lê no máximo os últimos 64 KB do arquivo, blindando a memória RAM
+                long readLength = Math.min(length, 64 * 1024);
+                long startPos = length - readLength;
+                
+                raf.seek(startPos);
+                byte[] buffer = new byte[(int) readLength];
+                raf.readFully(buffer);
+                
+                String tail = new String(buffer, "UTF-8");
+                String[] lines = tail.split("\n");
+                
+                // Pega no máximo as últimas 120 linhas do bloco lido
+                int startLine = Math.max(0, lines.length - 120);
+                
+                // Se não lemos desde o byte 0, a primeira linha do bloco provavelmente 
+                // foi cortada pela metade. Pulamos ela para não mostrar texto quebrado.
+                if (startPos > 0 && startLine == 0) {
+                    startLine = 1;
+                }
+                
+                for (int i = startLine; i < lines.length; i++) {
                     sb.append(lines[i]).append('\n');
                 }
             } catch (Exception e) {
