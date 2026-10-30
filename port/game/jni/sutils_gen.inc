@@ -1,3 +1,4 @@
+#include <cstdlib>   // std::getenv (ou getenv via <stdlib.h>)
 static jobject SUtils_gen_0(JNIEnv *env, jclass c, jstring a0) { (void)env; GEN_SAID("getGLUID(Ljava/lang/String;)[I"); return (jobject)env->NewIntArray(0); }
 static jobject SUtils_gen_1(JNIEnv *env, jclass c) { (void)env; (void)c; GEN_SAID("getGameName()Ljava/lang/String;"); return (jobject)env->NewStringUTF("GloftM4HM"); }
 static jobject SUtils_gen_2(JNIEnv *env, jclass c) {
