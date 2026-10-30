@@ -425,7 +425,7 @@ final class GameProcess {
         seedProfile(new File(root, "game"), saveFolder);
         env.put("MC4_SAVEDIR", new File(new File(root, "game"), saveFolder).getPath());
         appendLog("[wrapper] profile folder " + saveFolder);
-        env.put("MC4_GL_BRIDGE", "0");
+        env.put("MC4_GL_BRIDGE", "1");
         env.put("MC4_SCALE", "stretch");
         env.put("MC4_GL_CMD", glCmd.getPath());
         env.put("MC4_GL_REPLY", glReply.getPath());
