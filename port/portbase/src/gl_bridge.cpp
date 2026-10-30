@@ -1205,7 +1205,7 @@ static std::string filter_extensions(const std::string &all)
         "GL_EXT_texture_sRGB_R8",
 
         /* --- render targets: HDR / bloom / tone mapping --- */
-        "GL_EXT_color_buffer_float", "GL_EXT_color_buffer_half_float",
+        // "GL_EXT_color_buffer_float", "GL_EXT_color_buffer_half_float",
 
         /* --- MSAA on render-to-texture: edges --- */
         "GL_EXT_multisampled_render_to_texture",
