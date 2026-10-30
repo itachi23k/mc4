@@ -108,6 +108,8 @@ final class GameProcess {
             case "MC4_PRESET_SHARP":
             case "MC4_PRESET_SMOOTH":
             case "MC4_PRESET_EXTREME":
+            case "MC4_POST_PROCESS":
+            case "MC4_POST_STRENGTH":
                 return true;
             default:
                 return false;
@@ -404,6 +406,7 @@ final class GameProcess {
         Os.mkfifo(glCmd.getPath(), 0600);
         Os.mkfifo(glReply.getPath(), 0600);
         logFile.delete();
+        gl.setRenderSize(renderW, renderH);
         gl.start();
 
         ProcessBuilder b = new ProcessBuilder(qemu.getPath());
@@ -414,6 +417,10 @@ final class GameProcess {
         // Uma única leitura de settings, com os presets já aplicados, para todos os pontos abaixo.
         // Presets nunca sobrescrevem uma chave que o usuário já tenha salvo.
         Map<String, String> settings = withPresets(SettingsActivity.load(ctx));
+        float ppStrength = 1.0f;
+        try { ppStrength = Integer.parseInt(settings.getOrDefault("MC4_POST_STRENGTH", "10")) / 10f; }
+        catch (NumberFormatException ignored) { }
+        gl.setPostProcess("1".equals(settings.get("MC4_POST_PROCESS")), ppStrength);
 
         Map<String, String> env = b.environment();
         env.put("HOME", new File(root, "home").getPath());
@@ -508,7 +515,7 @@ final class GameProcess {
         try { fpsLimit = Integer.parseInt(settings.getOrDefault("FPS_LIMIT", "60")); } catch (NumberFormatException ignored) { }
         gl.setFrameLimit(fpsLimit);
         perf.start(p, "1".equals(settings.get("PERF_HINT")), fpsLimit);
-        appendLog("[wrapper] preset sharp=" + settings.getOrDefault("MC4_PRESET_SHARP", "0")
+                appendLog("[wrapper] preset sharp=" + settings.getOrDefault("MC4_PRESET_SHARP", "0")
                 + " smooth=" + settings.getOrDefault("MC4_PRESET_SMOOTH", "0")
                 + " extreme=" + settings.getOrDefault("MC4_PRESET_EXTREME", "0")
                 + " | render=" + renderW + "x" + renderH
@@ -516,7 +523,9 @@ final class GameProcess {
                 + " pipeKB=" + env.getOrDefault("MC4_GL_PIPE_KB", "1024")
                 + " rpEvery=" + env.getOrDefault("MC4_READPIXELS_EVERY", "3")
                 + " hudInset=" + env.getOrDefault("MC4_HUD_INSET", "0")
-                + " gpu=" + env.getOrDefault("MC4_GL_RENDERER", "(real)"));
+                + " gpu=" + env.getOrDefault("MC4_GL_RENDERER", "(real)")
+                + " | pp=" + settings.getOrDefault("MC4_POST_PROCESS", "0")
+                + " ppStrength=" + settings.getOrDefault("MC4_POST_STRENGTH", "10"));
 
         new Thread(this::writerLoop, "mc4-commands").start();
         new Thread(this::audioLoop, "mc4-audio").start();
