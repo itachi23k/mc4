@@ -31,6 +31,8 @@
             android:label="Modern Combat 4"
             android:icon="@drawable/icon"
             android:screenOrientation="sensorLandscape"
+            android:windowSoftInputMode="adjustResize|stateVisible"
+            android:configChanges="keyboard|keyboardHidden|orientation|screenSize"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -42,6 +44,7 @@
             android:screenOrientation="landscape"
             android:launchMode="singleTask"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|density|uiMode|touchscreen|fontScale|layoutDirection|locale|colorMode"
+            android:windowSoftInputMode="adjustResize|stateVisible"
             android:exported="true">
         </activity>
     </application>
