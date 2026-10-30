@@ -800,7 +800,7 @@ final class GlBridge implements Runnable {
         reply(bo.toByteArray());
     }
 
-        private void attach(Surface s) {
+            private void attach(Surface s) {
         log.log("attach called with surface: " + s + (s != null ? " (valid=" + s.isValid() + ")" : ""));
         if (window != EGL14.EGL_NO_SURFACE) {
             EGL14.eglMakeCurrent(dpy, pbuf, pbuf, ctx);
@@ -843,33 +843,6 @@ final class GlBridge implements Runnable {
                 log.log("eglCreateWindowSurface (sRGB) failed: 0x" + Integer.toHexString(err));
                 // Fallback: tenta sem colorspace, caso o driver rejeite
                 // EGL_GL_COLORSPACE_KHR. O app continua apresentando normalmente.
-                if (srgb) {
-                    w = EGL14.eglCreateWindowSurface(dpy, cfg, s, new int[] { EGL14.EGL_NONE }, 0);
-                    if (w != EGL14.EGL_NO_SURFACE && EGL14.eglMakeCurrent(dpy, w, w, ctx)) {
-                        window = w;
-                        EGL14.eglSwapInterval(dpy, 1);
-                        log.log("presenting on a window surface SUCCESS (no sRGB)");
-                    } else {
-                        log.log("eglCreateWindowSurface failed: 0x" + Integer.toHexString(EGL14.eglGetError()));
-                        EGL14.eglMakeCurrent(dpy, pbuf, pbuf, ctx);
-                    }
-                } else {
-                    EGL14.eglMakeCurrent(dpy, pbuf, pbuf, ctx);
-                }
-            }
-        } else if (s != null) {
-            log.log("attach: surface is NOT valid yet");
-        } else {
-            log.log("attach: surface is null");
-        }
-    
-                // Viewport is owned by the guest (OP_glViewport, MC4_WIDTH/MC4_HEIGHT).
-                // Forcing it here breaks framing and sharpness.
-            } else {
-                int err = EGL14.eglGetError();
-                log.log("eglCreateWindowSurface (sRGB) failed: 0x" + Integer.toHexString(err));
-                // Fallback: retry without colorspace, so the app still presents if the
-                // driver rejects EGL_GL_COLORSPACE_KHR.
                 if (srgb) {
                     w = EGL14.eglCreateWindowSurface(dpy, cfg, s, new int[] { EGL14.EGL_NONE }, 0);
                     if (w != EGL14.EGL_NO_SURFACE && EGL14.eglMakeCurrent(dpy, w, w, ctx)) {
