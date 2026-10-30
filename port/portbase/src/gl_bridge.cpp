@@ -1185,6 +1185,7 @@ static std::string filter_extensions(const std::string &all)
 
         /* --- depth / stencil formats --- */
         "GL_OES_depth_texture", "GL_OES_depth24", "GL_OES_packed_depth_stencil",
+        "GL_OES_depth_texture_cube_map", // Importante para as Shadow Maps em cubo
 
         /* --- core useful bits the engine probes for --- */
         "GL_OES_rgb8_rgba8", "GL_OES_standard_derivatives",
@@ -1198,6 +1199,7 @@ static std::string filter_extensions(const std::string &all)
         /* --- sRGB: gamma correct output and texture decode --- */
         "GL_EXT_sRGB", "GL_EXT_sRGB_write_control",
         "GL_EXT_texture_sRGB_decode", "GL_EXT_texture_format_sRGB_override",
+        "GL_EXT_texture_sRGB_R8",
 
         /* --- render targets: HDR / bloom / tone mapping --- */
         "GL_EXT_color_buffer_float", "GL_EXT_color_buffer_half_float",
