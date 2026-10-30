@@ -1,6 +1,14 @@
 static jobject SUtils_gen_0(JNIEnv *env, jclass c, jstring a0) { (void)env; GEN_SAID("getGLUID(Ljava/lang/String;)[I"); return (jobject)env->NewIntArray(0); }
 static jobject SUtils_gen_1(JNIEnv *env, jclass c) { (void)env; (void)c; GEN_SAID("getGameName()Ljava/lang/String;"); return (jobject)env->NewStringUTF("GloftM4HM"); }
-static jobject SUtils_gen_2(JNIEnv *env, jclass c) { (void)env; GEN_SAID("getInjectedIGP()Ljava/lang/String;"); return (jobject)env->NewStringUTF(""); }
+static jobject SUtils_gen_2(JNIEnv *env, jclass c) {
+    (void)c;
+    GEN_SAID("getInjectedIGP()Ljava/lang/String;");
+    // Retorna o mesmo nome de GPU que o bridge reporta via glGetString(GL_RENDERER).
+    // Sem isso, a engine cai no perfil conservador.
+    const char *gpu = getenv("MC4_GL_RENDERER");
+    if (gpu == nullptr) gpu = "Adreno (TM) 730";
+    return (jobject)env->NewStringUTF(gpu);
+}
 static jobject SUtils_gen_3(JNIEnv *env, jclass c) { (void)env; GEN_SAID("getInjectedSerialKey()Ljava/lang/String;"); return (jobject)env->NewStringUTF(""); }
 static jint SUtils_gen_4(JNIEnv *env, jclass c, jobject a0, jint a1) { (void)env; GEN_SAID("getInt([BI)I"); return 0; }
 static jint SUtils_gen_5(JNIEnv *env, jclass c) { (void)env; (void)c; GEN_SAID("hasConnectivity()I"); return 1; }
