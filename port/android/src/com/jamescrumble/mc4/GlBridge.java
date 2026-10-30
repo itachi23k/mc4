@@ -1146,6 +1146,7 @@ final class GlBridge implements Runnable {
         if (window != EGL14.EGL_NO_SURFACE) {
             // Viewport is owned by the guest; forcing it here breaks sharpness.
             pace();
+            if (ppEnabled && ppReady) runPostProcess();
             if (!EGL14.eglSwapBuffers(dpy, window)) {
                 log.log("eglSwapBuffers failed: 0x" + Integer.toHexString(EGL14.eglGetError()));
                 EGL14.eglMakeCurrent(dpy, pbuf, pbuf, ctx);
