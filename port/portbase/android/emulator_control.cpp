@@ -240,14 +240,13 @@ bool emulator_control_tick(long frame)
             else
                 trace("emulator: unknown stick '%s'", name);
         }
-            } else if (!strcmp(action, "text")) {
+    } else if (!strcmp(action, "text")) {
         // Pega tudo após "text "
         char *txt = line + 5;
         char *nl = strchr(txt, '\n');
         if (nl) *nl = '\0';
         android_input_inject_text(txt);
         trace("emulator: text received '%s'", txt);
-        }
     } else if (!strcmp(action, "screenshot")) {
         char token[96] = {};
         if (sscanf(line, "%*s %95s", token) == 1 && safe_token(token))
