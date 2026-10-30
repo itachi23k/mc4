@@ -72,7 +72,11 @@ final class GlBridge implements Runnable {
     private Surface pendingSurface;
     private boolean surfaceDirty;
 
-    // Resolução de renderização personalizável (Default é ignorado se setRenderSize for chamado)
+    /**
+     * Dimensões de renderização. Informativo: o guest é quem define o viewport via MC4_WIDTH/MC4_HEIGHT
+     * (GameProcess.chooseRenderSize) e chama glViewport por OP_glViewport. Estes campos servem só
+     * para o log e para o overlay de debug, nunca para forçar viewport no host.
+     */
     private volatile int renderWidth = 2400;
     private volatile int renderHeight = 1080;
 
@@ -136,13 +140,14 @@ final class GlBridge implements Runnable {
     }
 
     /**
-     * Define dinamicamente as dimensões do viewport de renderização baseado nas métricas do MainActivity
+     * Apenas registra as dimensões pretendidas no log. NÃO altera viewport:
+     * o guest chama glViewport (OP_glViewport) e é ele quem manda no enquadramento.
      */
     void setRenderSize(int width, int height) {
         if (width > 0 && height > 0) {
             this.renderWidth = width;
             this.renderHeight = height;
-            log.log(String.format(Locale.US, "GlBridge render size atualizado para: %dx%d", width, height));
+            log.log(String.format(Locale.US, "GlBridge render size documentado: %dx%d", width, height));
         }
     }
 
@@ -187,8 +192,10 @@ final class GlBridge implements Runnable {
         int[] ver = new int[2];
         if (!EGL14.eglInitialize(dpy, ver, 0, ver, 1)) throw new IllegalStateException("eglInitialize failed");
 
+        // alpha=8 primeiro: em Adreno/Mali, alpha=0 costuma desligar o dithering de 10 bits,
+        // o que produz bandas visíveis em gradientes (céu, fumaça, sombras).
         int[][] wanted = {
-            { 8, 8, 8, 8, 24, 8 }, { 8, 8, 8, 0, 24, 8 }, { 8, 8, 8, 0, 16, 0 }, { 8, 8, 8, 8, 16, 0 },
+            { 8, 8, 8, 8, 24, 8 }, { 8, 8, 8, 0, 24, 8 }, { 8, 8, 8, 8, 16, 0 }, { 8, 8, 8, 0, 16, 0 },
         };
         EGLConfig[] configs = new EGLConfig[1];
         int[] n = new int[1];
@@ -813,9 +820,9 @@ final class GlBridge implements Runnable {
                 if (w != EGL14.EGL_NO_SURFACE && EGL14.eglMakeCurrent(dpy, w, w, ctx)) {
                     window = w;
                     EGL14.eglSwapInterval(dpy, 1);
-                    
-                    GLES30.glViewport(0, 0, renderWidth, renderHeight);
-                    log.log("presenting on a window surface SUCCESS (" + renderWidth + "x" + renderHeight + ")");
+                    // Viewport NÃO é definido aqui: o guest chama glViewport (OP_glViewport)
+                    // com as dimensões de MC4_WIDTH/MC4_HEIGHT. Forçá-lo aqui quebra o enquadramento.
+                    log.log("presenting on a window surface SUCCESS");
                 } else {
                     log.log("eglCreateWindowSurface failed: 0x" + Integer.toHexString(EGL14.eglGetError()));
                     EGL14.eglMakeCurrent(dpy, pbuf, pbuf, ctx);
@@ -859,8 +866,8 @@ final class GlBridge implements Runnable {
         if (dirty) attach(s);
 
         if (window != EGL14.EGL_NO_SURFACE) {
-            GLES30.glViewport(0, 0, renderWidth, renderHeight);
-
+            // Viewport NÃO é redefinido aqui. O guest o configurou via OP_glViewport;
+            // sobrescrevê-lo a cada frame quebra nitidez e recorta a cena.
             pace();
             if (!EGL14.eglSwapBuffers(dpy, window)) {
                 log.log("eglSwapBuffers failed: 0x" + Integer.toHexString(EGL14.eglGetError()));
