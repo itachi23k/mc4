@@ -800,7 +800,7 @@ final class GlBridge implements Runnable {
         reply(bo.toByteArray());
     }
 
-    private void attach(Surface s) {
+        private void attach(Surface s) {
         log.log("attach called with surface: " + s + (s != null ? " (valid=" + s.isValid() + ")" : ""));
         if (window != EGL14.EGL_NO_SURFACE) {
             EGL14.eglMakeCurrent(dpy, pbuf, pbuf, ctx);
@@ -808,25 +808,61 @@ final class GlBridge implements Runnable {
             window = EGL14.EGL_NO_SURFACE;
         }
         if (s != null && s.isValid()) {
-            // Create the window surface with an sRGB colorspace when the driver supports it.
-            // GL_FRAMEBUFFER_SRGB only takes effect on the default framebuffer if the surface
-            // was created with EGL_GL_COLORSPACE_KHR=SRGB; enabling the flag alone is a no-op.
+            // EGL_GL_COLORSPACE_KHR / EGL_GL_COLORSPACE_SRGB_KHR da extensão
+            // EGL_KHR_gl_colorspace. Não expostos no EGLExt do Android; valores
+            // do registro oficial do Khronos.
+            final int EGL_GL_COLORSPACE_KHR = 0x309D;
+            final int EGL_GL_COLORSPACE_SRGB_KHR = 0x3089;
+
             String exts = GLES30.glGetString(GLES30.GL_EXTENSIONS);
+            // GL_EXT_sRGB / GL_EXT_sRGB_write_control é o sinal no lado GL. A
+            // extensão EGL em si não dá para checar pelo EGL14 do Android; na
+            // prática, pedir o colorspace e cair no fallback se falhar é seguro.
             boolean srgb = exts != null && (exts.contains("GL_EXT_sRGB_write_control")
                                          || exts.contains("GL_EXT_sRGB"));
             int[] surfAttr = srgb
-                    ? new int[] { EGLExt.EGL_GL_COLORSPACE_KHR, EGLExt.EGL_GL_COLORSPACE_SRGB_KHR, EGL14.EGL_NONE }
+                    ? new int[] { EGL_GL_COLORSPACE_KHR, EGL_GL_COLORSPACE_SRGB_KHR, EGL14.EGL_NONE }
                     : new int[] { EGL14.EGL_NONE };
             EGLSurface w = EGL14.eglCreateWindowSurface(dpy, cfg, s, surfAttr, 0);
             if (w != EGL14.EGL_NO_SURFACE && EGL14.eglMakeCurrent(dpy, w, w, ctx)) {
                 window = w;
                 EGL14.eglSwapInterval(dpy, 1);
                 if (srgb) {
-                    GLES30.glEnable(GLES30.GL_FRAMEBUFFER_SRGB);
+                    // NÃO chamar GLES30.glEnable(GL_FRAMEBUFFER_SRGB):
+                    // essa constante não existe em OpenGL ES. A conversão sRGB
+                    // do default framebuffer é automática quando a surface foi
+                    // criada com EGL_GL_COLORSPACE_SRGB_KHR.
                     log.log("presenting on a window surface SUCCESS (sRGB)");
                 } else {
                     log.log("presenting on a window surface SUCCESS");
                 }
+                // Viewport is owned by the guest (OP_glViewport, MC4_WIDTH/MC4_HEIGHT).
+                // Forcing it here breaks framing and sharpness.
+            } else {
+                int err = EGL14.eglGetError();
+                log.log("eglCreateWindowSurface (sRGB) failed: 0x" + Integer.toHexString(err));
+                // Fallback: tenta sem colorspace, caso o driver rejeite
+                // EGL_GL_COLORSPACE_KHR. O app continua apresentando normalmente.
+                if (srgb) {
+                    w = EGL14.eglCreateWindowSurface(dpy, cfg, s, new int[] { EGL14.EGL_NONE }, 0);
+                    if (w != EGL14.EGL_NO_SURFACE && EGL14.eglMakeCurrent(dpy, w, w, ctx)) {
+                        window = w;
+                        EGL14.eglSwapInterval(dpy, 1);
+                        log.log("presenting on a window surface SUCCESS (no sRGB)");
+                    } else {
+                        log.log("eglCreateWindowSurface failed: 0x" + Integer.toHexString(EGL14.eglGetError()));
+                        EGL14.eglMakeCurrent(dpy, pbuf, pbuf, ctx);
+                    }
+                } else {
+                    EGL14.eglMakeCurrent(dpy, pbuf, pbuf, ctx);
+                }
+            }
+        } else if (s != null) {
+            log.log("attach: surface is NOT valid yet");
+        } else {
+            log.log("attach: surface is null");
+        }
+    }
                 // Viewport is owned by the guest (OP_glViewport, MC4_WIDTH/MC4_HEIGHT).
                 // Forcing it here breaks framing and sharpness.
             } else {
