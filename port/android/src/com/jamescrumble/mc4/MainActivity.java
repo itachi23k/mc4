@@ -274,20 +274,7 @@ public final class MainActivity extends Activity {
         if (overlay != null) overlay.invalidate();
     }
 
-    private static int keyCodeFor(char ch) {
-        if (ch >= 'a' && ch <= 'z') return KeyEvent.KEYCODE_A + (ch - 'a');
-        if (ch >= 'A' && ch <= 'Z') return KeyEvent.KEYCODE_A + (ch - 'A');
-        if (ch >= '0' && ch <= '9') return KeyEvent.KEYCODE_0 + (ch - '0');
-        switch (ch) {
-            case ' ':  return KeyEvent.KEYCODE_SPACE;
-            case '.':  return KeyEvent.KEYCODE_PERIOD;
-            case ',':  return KeyEvent.KEYCODE_COMMA;
-            case '-':  return KeyEvent.KEYCODE_MINUS;
-            case '_':  return KeyEvent.KEYCODE_MINUS;
-            case '\n': return KeyEvent.KEYCODE_ENTER;
-            default:   return -1;
-        }
-    }
+    
 
     private volatile String fpsText = "";
 
