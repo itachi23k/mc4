@@ -328,9 +328,10 @@ public final class MainActivity extends Activity {
                     }
                 }
             }
-            if (phase != Phase.PLAYING) overlay.invalidate();
+                        if (phase != Phase.PLAYING) overlay.invalidate();
             ui.postDelayed(this, phase == Phase.PLAYING ? 250 : 40);
         }
+    };
 
     @Override public void onWindowFocusChanged(boolean focus) {
         super.onWindowFocusChanged(focus);
