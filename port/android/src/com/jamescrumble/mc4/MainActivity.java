@@ -25,6 +25,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.EditText;
 
 /**
  * Full-screen shell around the emulated game. The picture comes from {@link GlBridge}, which renders the
@@ -37,11 +40,6 @@ public final class MainActivity extends Activity {
     private static final int MAX_POINTERS = 20;
     private static final int ZONE_NONE = 0, ZONE_LEFT = 1, ZONE_RIGHT = 2, ZONE_CURSOR = 3, ZONE_BUTTON = 4;
 
-    /*
-     * One game per app process. The activity can be recreated while qemu keeps running (a config change the
-     * manifest does not list, a second launch); starting another copy would leave two emulated games
-     * sharing the CPU, so a new activity attaches to the running one instead.
-     */
     private static GameProcess running;
 
     private GameProcess game;
@@ -58,7 +56,12 @@ public final class MainActivity extends Activity {
     private int fpsLimit = 60;
     private WifiManager.MulticastLock multicastLock;
 
-    /** Tells the compositor how fast this surface is meant to be drawn (API 30+). */
+    // NEW: teclado on-screen
+    private EditText kbdField;
+    private volatile boolean kbdVisible;
+    private String kbdLast = "";
+    private boolean kbdSuppress = false;
+
     private void setRate(android.view.Surface surf) {
         if (Build.VERSION.SDK_INT >= 30 && surf != null && surf.isValid()) {
             try { surf.setFrameRate(fpsLimit, android.view.Surface.FRAME_RATE_COMPATIBILITY_DEFAULT); } catch (RuntimeException ignored) { }
@@ -131,7 +134,6 @@ public final class MainActivity extends Activity {
         SurfaceHolder holder = glView.getHolder();
         holder.setFormat(PixelFormat.OPAQUE);
 
-        // --- CORREÇÃO CIRÚRGICA DA TELA PRETA ---
         holder.addCallback(new SurfaceHolder.Callback() {
             @Override public void surfaceCreated(SurfaceHolder h) {
                 if (h.getSurface() != null && h.getSurface().isValid()) {
@@ -146,7 +148,6 @@ public final class MainActivity extends Activity {
                 }
             }
             @Override public void surfaceDestroyed(SurfaceHolder h) {
-                // Apenas desvincula a superfície se a Activity realmente estiver finalizando
                 if (isFinishing()) {
                     game.gl().setSurface(null);
                 }
@@ -157,6 +158,68 @@ public final class MainActivity extends Activity {
         overlay = new Overlay(this);
         root.addView(overlay, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         setContentView(root);
+
+        // NEW: campo flutuante do teclado. GONE por padrão; o botão [⌨] do overlay o revela.
+        kbdField = new EditText(this);
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(0xdd101820);
+        bg.setCornerRadius(14 * getResources().getDisplayMetrics().density);
+        bg.setStroke(Math.round(2 * getResources().getDisplayMetrics().density), 0xff4fc3f7);
+        kbdField.setBackground(bg);
+        kbdField.setTextColor(0xfff2f5f7);
+        kbdField.setHintTextColor(0x88f2f5f7);
+        kbdField.setHint("Digite o nick…");
+        int padH = Math.round(20 * getResources().getDisplayMetrics().density);
+        int padV = Math.round(12 * getResources().getDisplayMetrics().density);
+        kbdField.setPadding(padH, padV, padH, padV);
+        kbdField.setTextSize(20);
+        kbdField.setSingleLine(true);
+        kbdField.setImeOptions(EditorInfo.IME_ACTION_DONE);
+        kbdField.setVisibility(View.GONE);
+        FrameLayout.LayoutParams kbdLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                android.view.Gravity.TOP | android.view.Gravity.CENTER_HORIZONTAL);
+        int marginTop = Math.round(20 * getResources().getDisplayMetrics().density);
+        int marginSide = Math.round(80 * getResources().getDisplayMetrics().density);
+        kbdLp.setMargins(marginSide, marginTop, marginSide, 0);
+        root.addView(kbdField, kbdLp);
+
+        kbdField.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
+            @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
+            @Override public void afterTextChanged(android.text.Editable e) {
+                if (kbdSuppress) return;
+                String now = e.toString();
+                if (now.length() < kbdLast.length()) {
+                    int removed = kbdLast.length() - now.length();
+                    for (int i = 0; i < removed; i++) {
+                        game.command("key 67 down", null);
+                        game.command("key 67 up", null);
+                    }
+                } else if (now.length() > kbdLast.length()) {
+                    // append (ou paste no fim); insere no meio é raro e fica sem suporte.
+                    String added = now.substring(kbdLast.length());
+                    for (int i = 0; i < added.length(); i++) {
+                        int code = keyCodeFor(added.charAt(i));
+                        if (code > 0) {
+                            game.command("key " + code + " down", null);
+                            game.command("key " + code + " up", null);
+                        }
+                    }
+                }
+                kbdLast = now;
+            }
+        });
+        kbdField.setOnEditorActionListener((v, actionId, ev) -> {
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                game.command("key 66 down", null);
+                game.command("key 66 up", null);
+                hideKeyboard();
+                return true;
+            }
+            return false;
+        });
 
         InputManager im = (InputManager) getSystemService(Context.INPUT_SERVICE);
         if (im != null) im.registerInputDeviceListener(padWatcher, ui);
@@ -191,6 +254,54 @@ public final class MainActivity extends Activity {
         }, "mc4-setup").start();
     }
 
+    // ------------------------------------------------------------ NEW: teclado on-screen
+
+    private void showKeyboard() {
+        if (kbdVisible || kbdField == null || phase != Phase.PLAYING) return;
+        kbdVisible = true;
+        kbdSuppress = true;
+        kbdField.setText("");          // começa limpo
+        kbdSuppress = false;
+        kbdLast = "";
+        kbdField.setVisibility(View.VISIBLE);
+        kbdField.post(() -> {
+            kbdField.requestFocus();
+            InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+            if (imm != null) imm.showSoftInput(kbdField, InputMethodManager.SHOW_IMPLICIT);
+        });
+        game.setMuted(true);
+        if (overlay != null) overlay.invalidate();
+    }
+
+    private void hideKeyboard() {
+        if (!kbdVisible || kbdField == null) return;
+        kbdVisible = false;
+        InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (imm != null) imm.hideSoftInputFromWindow(kbdField.getWindowToken(), 0);
+        kbdField.setVisibility(View.GONE);
+        kbdSuppress = true;
+        kbdField.setText("");
+        kbdSuppress = false;
+        kbdLast = "";
+        if (phase == Phase.PLAYING) game.setMuted(false);
+        if (overlay != null) overlay.invalidate();
+    }
+
+    private static int keyCodeFor(char ch) {
+        if (ch >= 'a' && ch <= 'z') return KeyEvent.KEYCODE_A + (ch - 'a');
+        if (ch >= 'A' && ch <= 'Z') return KeyEvent.KEYCODE_A + (ch - 'A');
+        if (ch >= '0' && ch <= '9') return KeyEvent.KEYCODE_0 + (ch - '0');
+        switch (ch) {
+            case ' ':  return KeyEvent.KEYCODE_SPACE;
+            case '.':  return KeyEvent.KEYCODE_PERIOD;
+            case ',':  return KeyEvent.KEYCODE_COMMA;
+            case '-':  return KeyEvent.KEYCODE_MINUS;
+            case '_':  return KeyEvent.KEYCODE_MINUS;
+            case '\n': return KeyEvent.KEYCODE_ENTER;
+            default:   return -1;
+        }
+    }
+
     private volatile String fpsText = "";
 
     private final Runnable poller = new Runnable() {
@@ -214,7 +325,6 @@ public final class MainActivity extends Activity {
                     if (p == Phase.LOADING && (menu || s[0] > 300)) {
                         phase = Phase.PLAYING;
                         game.setMuted(false);
-
                         overlay.invalidate();
                     }
                     if (menu != menuMode) {
@@ -250,7 +360,7 @@ public final class MainActivity extends Activity {
 
     @Override protected void onResume() {
         super.onResume();
-        if (phase == Phase.PLAYING) game.setMuted(false);
+        if (phase == Phase.PLAYING && !kbdVisible) game.setMuted(false);
     }
 
     @Override protected void onDestroy() {
@@ -321,6 +431,11 @@ public final class MainActivity extends Activity {
     }
 
     @Override public boolean dispatchKeyEvent(KeyEvent e) {
+        // NEW: Back fecha o teclado antes de ir para o jogo.
+        if (e.getKeyCode() == KeyEvent.KEYCODE_BACK && kbdVisible) {
+            if (e.getAction() == KeyEvent.ACTION_UP) hideKeyboard();
+            return true;
+        }
         int action = e.getAction();
         boolean edge = (action == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) || action == KeyEvent.ACTION_UP;
         if (e.getKeyCode() == KeyEvent.KEYCODE_BACK && game.touchMode() && phase == Phase.PLAYING) {
@@ -386,6 +501,7 @@ public final class MainActivity extends Activity {
         private final float density = getResources().getDisplayMetrics().density;
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final RectF bar = new RectF();
+        private final RectF kbdBtn = new RectF();   // NEW: botão [⌨]
         private final Button[] buttons = {
             new Button("L1", "l1"), new Button("R1", "r1"), new Button("A", "a"),
             new Button("B", "b"), new Button("X", "x"), new Button("Y", "y"),
@@ -414,6 +530,9 @@ public final class MainActivity extends Activity {
                 buttons[i].rect.set(x, y, x + s, y + s);
             }
             buttons[6].rect.set((w - s) / 2f, margin, (w + s) / 2f, margin + s);
+            // NEW: botão [⌨] no canto superior direito.
+            float kb = 44 * density;
+            kbdBtn.set(w - margin - kb, margin, w - margin, margin + kb);
         }
 
         @Override protected void onDraw(Canvas c) {
@@ -422,6 +541,7 @@ public final class MainActivity extends Activity {
                 c.drawColor(android.graphics.Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR);
                 if (!menuMode && (!game.touchMode() || padOn)) drawButtons(c);
                 if (showFps) drawFps(c);
+                drawKbdButton(c);   // NEW: sempre visível durante o jogo
             } else {
                 drawLoading(c, p, SystemClock.uptimeMillis());
             }
@@ -439,6 +559,17 @@ public final class MainActivity extends Activity {
             c.drawRect(x - w, y - 14 * density, x + w, y + 5 * density, paint);
             paint.setColor(0xff7cfc00);
             c.drawText(s, x, y, paint);
+        }
+
+        // NEW: botão [⌨] do canto superior direito
+        private void drawKbdButton(Canvas c) {
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(kbdVisible ? 0xcc4fc3f7 : 0x77000000);
+            c.drawRoundRect(kbdBtn, 10 * density, 10 * density, paint);
+            paint.setColor(0xffffffff);
+            paint.setTextAlign(Paint.Align.CENTER);
+            paint.setTextSize(20 * density);
+            c.drawText("⌨", kbdBtn.centerX(), kbdBtn.centerY() + 7 * density, paint);
         }
 
         private void drawButtons(Canvas c) {
@@ -627,6 +758,20 @@ public final class MainActivity extends Activity {
 
         @Override public boolean onTouchEvent(MotionEvent e) {
             if (phase != Phase.PLAYING) return true;
+
+            // NEW: botão [⌨] interceptado antes de tudo (funciona em touch mode e em pad mode).
+            int idx = e.getActionIndex();
+            if (e.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                float x = e.getX(idx), y = e.getY(idx);
+                if (kbdBtn.contains(x, y)) {
+                    if (kbdVisible) hideKeyboard(); else showKeyboard();
+                    return true;
+                }
+            }
+
+            // NEW: enquanto o teclado está visível, o jogo não recebe toques.
+            if (kbdVisible) return true;
+
             if (game.touchMode() && !padOn) {
                 nativeTouch(e);
                 return true;
@@ -635,7 +780,6 @@ public final class MainActivity extends Activity {
                 seenEpoch = modeEpoch;
                 releaseAll();
             }
-            int idx = e.getActionIndex();
             switch (e.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                 case MotionEvent.ACTION_POINTER_DOWN:
