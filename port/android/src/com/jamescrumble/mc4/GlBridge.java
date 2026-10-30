@@ -818,8 +818,7 @@ final class GlBridge implements Runnable {
             // GL_EXT_sRGB / GL_EXT_sRGB_write_control é o sinal no lado GL. A
             // extensão EGL em si não dá para checar pelo EGL14 do Android; na
             // prática, pedir o colorspace e cair no fallback se falhar é seguro.
-            boolean srgb = exts != null && (exts.contains("GL_EXT_sRGB_write_control")
-                                         || exts.contains("GL_EXT_sRGB"));
+            boolean srgb = false; // engine escreve linear; forçar sRGB aplica gamma dupla (cores lavadas)
             int[] surfAttr = srgb
                     ? new int[] { EGL_GL_COLORSPACE_KHR, EGL_GL_COLORSPACE_SRGB_KHR, EGL14.EGL_NONE }
                     : new int[] { EGL14.EGL_NONE };
