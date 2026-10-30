@@ -76,6 +76,20 @@ final class GlBridge implements Runnable {
     private volatile int renderWidth = 2400;
     private volatile int renderHeight = 1080;
 
+
+        /** Size of the current window surface (panel). Queried lazily in runPostProcess. */
+    private int surfaceWidth, surfaceHeight;
+
+    // ---------------------------------------------------------------- post-process (CAS)
+    private volatile boolean ppEnabled;
+    private volatile float ppStrength = 1.0f;
+    private int ppFbo, ppTex, ppDepthStencil;
+    private int ppWidth, ppHeight;          // FBO dimensions = render dims
+    private int ppProgram, ppVbo, ppVao;
+    private int ppTexUniform, ppResUniform, ppStrengthUniform;
+    private boolean ppReady;
+
+
     private FileDescriptor cmd, rep;
     private ByteBuffer in = ByteBuffer.allocateDirect(2 << 20).order(ByteOrder.LITTLE_ENDIAN);
     private ByteBuffer pay = in.duplicate().order(ByteOrder.LITTLE_ENDIAN);
@@ -145,6 +159,16 @@ final class GlBridge implements Runnable {
             log.log(String.format(Locale.US, "GlBridge render size atualizado para: %dx%d", width, height));
         }
     }
+
+
+        /** Enables CAS post-processing at the given strength (0.5..1.5 recommended). */
+    void setPostProcess(boolean enabled, float strength) {
+        this.ppEnabled = enabled;
+        if (strength > 0.1f && strength <= 3.0f) this.ppStrength = strength;
+        log.log("GlBridge post-process " + (enabled ? "enabled" : "disabled")
+                + (enabled ? " (strength " + strength + ")" : ""));
+    }
+
 
     long swaps() { return swaps; }
 
@@ -241,9 +265,14 @@ final class GlBridge implements Runnable {
         return line + src;
     }
 
-    private void teardown() {
+        private void teardown() {
         try {
             if (dpy != EGL14.EGL_NO_DISPLAY) {
+                // Make the context current so GL resources can be released.
+                if (window == EGL14.EGL_NO_SURFACE && pbuf != EGL14.EGL_NO_SURFACE) {
+                    EGL14.eglMakeCurrent(dpy, pbuf, pbuf, ctx);
+                }
+                destroyPostProcess();
                 EGL14.eglMakeCurrent(dpy, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_CONTEXT);
                 if (window != EGL14.EGL_NO_SURFACE) EGL14.eglDestroySurface(dpy, window);
                 if (pbuf != EGL14.EGL_NO_SURFACE) EGL14.eglDestroySurface(dpy, pbuf);
@@ -383,8 +412,24 @@ final class GlBridge implements Runnable {
 
     private static int[] one() { return new int[1]; }
 
-    private void dispatch(int op, int plen) {
+        private void dispatch(int op, int plen) {
         ByteBuffer b = pay;
+
+        // Redirect the game's default framebuffer (0) to the intermediate FBO when
+        // post-processing is on. Queries for GL_FRAMEBUFFER_BINDING still return 0.
+        if (ppEnabled && op == GlOps.OP_glBindFramebuffer) {
+            int mark = b.position();
+            int target = b.getInt(mark);
+            int fbId = b.getInt(mark + 4);
+            if (target == GLES30.GL_FRAMEBUFFER && fbId == 0) {
+                if (!ppReady) ensurePostProcess(renderWidth, renderHeight);
+                if (ppReady) {
+                    GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, ppFbo);
+                    return;
+                }
+            }
+        }
+
         if (GlOps.exec(op, b, ids)) return;
         switch (op) {
             case GlOps.OP_SWAP: swap(); break;
@@ -803,6 +848,207 @@ final class GlBridge implements Runnable {
         }
         reply(bo.toByteArray());
     }
+
+            // ------------------------------------------------------------ post-processing
+
+    private void ensurePostProcess(int w, int h) {
+        if (w <= 0 || h <= 0) return;
+        if (ppReady && ppWidth == w && ppHeight == h) return;
+        destroyPostProcess();
+
+        int[] t = new int[1];
+        GLES30.glGenTextures(1, t, 0);
+        ppTex = t[0];
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, ppTex);
+        GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA8, w, h, 0,
+                GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, null);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_S, GLES30.GL_CLAMP_TO_EDGE);
+        GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0);
+
+        int[] rb = new int[1];
+        GLES30.glGenRenderbuffers(1, rb, 0);
+        ppDepthStencil = rb[0];
+        GLES30.glBindRenderbuffer(GLES30.GL_RENDERBUFFER, ppDepthStencil);
+        GLES30.glRenderbufferStorage(GLES30.GL_RENDERBUFFER, GLES30.GL_DEPTH24_STENCIL8, w, h);
+        GLES30.glBindRenderbuffer(GLES30.GL_RENDERBUFFER, 0);
+
+        int[] f = new int[1];
+        GLES30.glGenFramebuffers(1, f, 0);
+        ppFbo = f[0];
+        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, ppFbo);
+        GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0,
+                GLES30.GL_TEXTURE_2D, ppTex, 0);
+        GLES30.glFramebufferRenderbuffer(GLES30.GL_FRAMEBUFFER, GLES30.GL_DEPTH_STENCIL_ATTACHMENT,
+                GLES30.GL_RENDERBUFFER, ppDepthStencil);
+        int st = GLES30.glCheckFramebufferStatus(GLES30.GL_FRAMEBUFFER);
+        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
+
+        if (st != GLES30.GL_FRAMEBUFFER_COMPLETE) {
+            log.log("ppFbo incomplete: 0x" + Integer.toHexString(st));
+            return;
+        }
+        if (!buildPostProcessProgram()) return;
+        buildQuad();
+
+        ppWidth = w;
+        ppHeight = h;
+        ppReady = true;
+        log.log("post-process ready: FBO " + w + "x" + h + ", strength " + ppStrength);
+    }
+
+    private void destroyPostProcess() {
+        if (ppFbo != 0) { GLES30.glDeleteFramebuffers(1, new int[]{ppFbo}, 0); ppFbo = 0; }
+        if (ppTex != 0) { GLES30.glDeleteTextures(1, new int[]{ppTex}, 0); ppTex = 0; }
+        if (ppDepthStencil != 0) { GLES30.glDeleteRenderbuffers(1, new int[]{ppDepthStencil}, 0); ppDepthStencil = 0; }
+        if (ppProgram != 0) { GLES30.glDeleteProgram(ppProgram); ppProgram = 0; }
+        if (ppVbo != 0) { GLES30.glDeleteBuffers(1, new int[]{ppVbo}, 0); ppVbo = 0; }
+        if (ppVao != 0) { GLES30.glDeleteVertexArrays(1, new int[]{ppVao}, 0); ppVao = 0; }
+        ppReady = false;
+        ppWidth = ppHeight = 0;
+    }
+
+    private static final String PP_VS =
+            "#version 300 es\n" +
+            "layout(location=0) in vec2 aPos;\n" +
+            "out vec2 vUv;\n" +
+            "void main() {\n" +
+            "    vUv = (aPos + 1.0) * 0.5;\n" +
+            "    gl_Position = vec4(aPos, 0.0, 1.0);\n" +
+            "}\n";
+
+    private static final String PP_FS =
+            "#version 300 es\n" +
+            "precision highp float;\n" +
+            "uniform sampler2D uTex;\n" +
+            "uniform vec2 uRes;\n" +
+            "uniform float uStrength;\n" +
+            "in vec2 vUv;\n" +
+            "out vec4 fragColor;\n" +
+            "vec3 F(vec2 uv) { return texture(uTex, uv).rgb; }\n" +
+            "void main() {\n" +
+            "    vec2 px = 1.0 / uRes;\n" +
+            "    vec3 c  = F(vUv);\n" +
+            "    vec3 n  = F(vUv + vec2( 0.0, -px.y));\n" +
+            "    vec3 s  = F(vUv + vec2( 0.0,  px.y));\n" +
+            "    vec3 w  = F(vUv + vec2(-px.x,  0.0));\n" +
+            "    vec3 e  = F(vUv + vec2( px.x,  0.0));\n" +
+            "    vec3 nw = F(vUv + vec2(-px.x, -px.y));\n" +
+            "    vec3 ne = F(vUv + vec2( px.x, -px.y));\n" +
+            "    vec3 sw = F(vUv + vec2(-px.x,  px.y));\n" +
+            "    vec3 se = F(vUv + vec2( px.x,  px.y));\n" +
+            "    vec3 mn = min(min(min(nw, n), min(ne, w)), min(min(c, e), min(min(sw, s), se)));\n" +
+            "    vec3 mx = max(max(max(nw, n), max(ne, w)), max(max(c, e), max(max(sw, s), se)));\n" +
+            "    vec3 blur = (nw + n + ne + w + e + sw + s + se) * 0.125;\n" +
+            "    vec3 sharpened = c + (c - blur) * uStrength;\n" +
+            "    sharpened = clamp(sharpened, mn, mx);\n" +
+            "    fragColor = vec4(sharpened, 1.0);\n" +
+            "}\n";
+
+    private boolean buildPostProcessProgram() {
+        int v = GLES30.glCreateShader(GLES30.GL_VERTEX_SHADER);
+        GLES30.glShaderSource(v, PP_VS);
+        GLES30.glCompileShader(v);
+        int[] ok = new int[1];
+        GLES30.glGetShaderiv(v, GLES30.GL_COMPILE_STATUS, ok, 0);
+        if (ok[0] == 0) {
+            log.log("pp VS compile failed: " + GLES30.glGetShaderInfoLog(v));
+            GLES30.glDeleteShader(v);
+            return false;
+        }
+
+        int f = GLES30.glCreateShader(GLES30.GL_FRAGMENT_SHADER);
+        GLES30.glShaderSource(f, PP_FS);
+        GLES30.glCompileShader(f);
+        GLES30.glGetShaderiv(f, GLES30.GL_COMPILE_STATUS, ok, 0);
+        if (ok[0] == 0) {
+            log.log("pp FS compile failed: " + GLES30.glGetShaderInfoLog(f));
+            GLES30.glDeleteShader(v);
+            GLES30.glDeleteShader(f);
+            return false;
+        }
+
+        ppProgram = GLES30.glCreateProgram();
+        GLES30.glAttachShader(ppProgram, v);
+        GLES30.glAttachShader(ppProgram, f);
+        GLES30.glLinkProgram(ppProgram);
+        GLES30.glGetProgramiv(ppProgram, GLES30.GL_LINK_STATUS, ok, 0);
+        GLES30.glDeleteShader(v);
+        GLES30.glDeleteShader(f);
+        if (ok[0] == 0) {
+            log.log("pp link failed: " + GLES30.glGetProgramInfoLog(ppProgram));
+            GLES30.glDeleteProgram(ppProgram);
+            ppProgram = 0;
+            return false;
+        }
+
+        ppTexUniform = GLES30.glGetUniformLocation(ppProgram, "uTex");
+        ppResUniform = GLES30.glGetUniformLocation(ppProgram, "uRes");
+        ppStrengthUniform = GLES30.glGetUniformLocation(ppProgram, "uStrength");
+        return true;
+    }
+
+    private void buildQuad() {
+        int[] vao = new int[1], vbo = new int[1];
+        GLES30.glGenVertexArrays(1, vao, 0);
+        ppVao = vao[0];
+        GLES30.glGenBuffers(1, vbo, 0);
+        ppVbo = vbo[0];
+
+        GLES30.glBindVertexArray(ppVao);
+        GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, ppVbo);
+        float[] verts = { -1f, -1f,  3f, -1f,  -1f, 3f };
+        ByteBuffer bb = ByteBuffer.allocateDirect(verts.length * 4).order(ByteOrder.nativeOrder());
+        bb.asFloatBuffer().put(verts);
+        bb.rewind();
+        GLES30.glBufferData(GLES30.GL_ARRAY_BUFFER, verts.length * 4, bb, GLES30.GL_STATIC_DRAW);
+        GLES30.glEnableVertexAttribArray(0);
+        GLES30.glVertexAttribPointer(0, 2, GLES30.GL_FLOAT, false, 0, 0);
+        GLES30.glBindVertexArray(0);
+        GLES30.glBindBuffer(GLES30.GL_ARRAY_BUFFER, 0);
+    }
+
+    private void runPostProcess() {
+        if (!ppReady || ppProgram == 0) return;
+
+        if (surfaceWidth == 0 || surfaceHeight == 0) {
+            int[] w = new int[1], h = new int[1];
+            EGL14.eglQuerySurface(dpy, window, EGL14.EGL_WIDTH, w, 0);
+            EGL14.eglQuerySurface(dpy, window, EGL14.EGL_HEIGHT, h, 0);
+            surfaceWidth = w[0];
+            surfaceHeight = h[0];
+            log.log("post-process viewport: panel " + surfaceWidth + "x" + surfaceHeight
+                    + ", FBO " + ppWidth + "x" + ppHeight);
+        }
+
+        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
+        GLES30.glViewport(0, 0, surfaceWidth, surfaceHeight);
+        GLES30.glDisable(GLES30.GL_DEPTH_TEST);
+        GLES30.glDisable(GLES30.GL_STENCIL_TEST);
+        GLES30.glDisable(GLES30.GL_BLEND);
+        GLES30.glDisable(GLES30.GL_CULL_FACE);
+        GLES30.glDisable(GLES30.GL_SCISSOR_TEST);
+        GLES30.glColorMask(true, true, true, true);
+
+        GLES30.glUseProgram(ppProgram);
+        GLES30.glActiveTexture(GLES30.GL_TEXTURE0);
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, ppTex);
+        GLES30.glUniform1i(ppTexUniform, 0);
+        GLES30.glUniform2f(ppResUniform, (float) ppWidth, (float) ppHeight);
+        GLES30.glUniform1f(ppStrengthUniform, ppStrength);
+
+        GLES30.glBindVertexArray(ppVao);
+        GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 3);
+        GLES30.glBindVertexArray(0);
+
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0);
+        GLES30.glUseProgram(0);
+    }
+
+
+
 
             private void attach(Surface s) {
         log.log("attach called with surface: " + s + (s != null ? " (valid=" + s.isValid() + ")" : ""));
