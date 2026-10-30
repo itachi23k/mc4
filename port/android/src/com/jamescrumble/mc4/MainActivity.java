@@ -185,36 +185,15 @@ public final class MainActivity extends Activity {
         kbdLp.setMargins(marginSide, marginTop, marginSide, 0);
         root.addView(kbdField, kbdLp);
 
-        kbdField.addTextChangedListener(new android.text.TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int a, int b, int c) { }
-            @Override public void onTextChanged(CharSequence s, int a, int b, int c) { }
-            @Override public void afterTextChanged(android.text.Editable e) {
-                if (kbdSuppress) return;
-                String now = e.toString();
-                if (now.length() < kbdLast.length()) {
-                    int removed = kbdLast.length() - now.length();
-                    for (int i = 0; i < removed; i++) {
-                        game.command("key 67 down", null);
-                        game.command("key 67 up", null);
-                    }
-                } else if (now.length() > kbdLast.length()) {
-                    // append (ou paste no fim); insere no meio é raro e fica sem suporte.
-                    String added = now.substring(kbdLast.length());
-                    for (int i = 0; i < added.length(); i++) {
-                        int code = keyCodeFor(added.charAt(i));
-                        if (code > 0) {
-                            game.command("key " + code + " down", null);
-                            game.command("key " + code + " up", null);
-                        }
-                    }
-                }
-                kbdLast = now;
-            }
-        });
-        kbdField.setOnEditorActionListener((v, actionId, ev) -> {
-            if (actionId == EditorInfo.IME_ACTION_DONE) {
-                game.command("key 66 down", null);
-                game.command("key 66 up", null);
+        
+                kbdField.setOnEditorActionListener((v, actionId, ev) -> {
+            if (actionId == EditorInfo.IME_ACTION_DONE || 
+               (ev != null && ev.getKeyCode() == KeyEvent.KEYCODE_ENTER && ev.getAction() == KeyEvent.ACTION_DOWN)) {
+                
+                String text = kbdField.getText().toString();
+                // Envia a string completa pelo pipe para o C++
+                game.command("text " + text, null); 
+                
                 hideKeyboard();
                 return true;
             }
@@ -256,13 +235,21 @@ public final class MainActivity extends Activity {
 
     // ------------------------------------------------------------ NEW: teclado on-screen
 
-    private void showKeyboard() {
+        // Mude de "private void showKeyboard()" para:
+    private void showKeyboard(String initialText) {
         if (kbdVisible || kbdField == null || phase != Phase.PLAYING) return;
         kbdVisible = true;
         kbdSuppress = true;
-        kbdField.setText("");          // começa limpo
+        
+        // Define o texto vindo do C++ e posiciona o cursor no fim
+        kbdField.setText(initialText);
+        if (initialText != null && !initialText.isEmpty()) {
+            kbdField.setSelection(initialText.length());
+        }
+        
         kbdSuppress = false;
-        kbdLast = "";
+        kbdLast = initialText != null ? initialText : "";
+        
         kbdField.setVisibility(View.VISIBLE);
         kbdField.post(() -> {
             kbdField.requestFocus();
@@ -308,7 +295,7 @@ public final class MainActivity extends Activity {
         private long lastReport = SystemClock.uptimeMillis();
         private long fpsAt = SystemClock.uptimeMillis(), fpsSwaps;
 
-        @Override public void run() {
+                @Override public void run() {
             Phase p = phase;
             long t = SystemClock.uptimeMillis();
             if (showFps && p == Phase.PLAYING && t - fpsAt >= 500) {
@@ -338,11 +325,25 @@ public final class MainActivity extends Activity {
                         game.log(String.format(Locale.US, "phase=%s frame=%d menu=%d presented=%d", phase, s[0], s[1], game.gl().swaps()));
                     }
                 }
+
+                // NEW: Verifica se o jogo (C++) pediu para abrir o teclado
+                if (p == Phase.PLAYING && !kbdVisible) {
+                    File kbReq = new File(getFilesDir(), "ctl/keyboard_request");
+                    if (kbReq.exists()) {
+                        String initialText = "";
+                        try {
+                            java.util.List<String> lines = java.nio.file.Files.readAllLines(kbReq.toPath());
+                            if (lines.size() > 0) initialText = lines.get(0);
+                        } catch (Exception ignored) { }
+                        
+                        kbReq.delete(); // Deleta o arquivo para não abrir duas vezes
+                        showKeyboard(initialText);
+                    }
+                }
             }
             if (phase != Phase.PLAYING) overlay.invalidate();
             ui.postDelayed(this, phase == Phase.PLAYING ? 250 : 40);
         }
-    };
 
     @Override public void onWindowFocusChanged(boolean focus) {
         super.onWindowFocusChanged(focus);
@@ -764,7 +765,7 @@ public final class MainActivity extends Activity {
             if (e.getActionMasked() == MotionEvent.ACTION_DOWN) {
                 float x = e.getX(idx), y = e.getY(idx);
                 if (kbdBtn.contains(x, y)) {
-                    if (kbdVisible) hideKeyboard(); else showKeyboard();
+                    if (kbdVisible) hideKeyboard(); else showKeyboard("");
                     return true;
                 }
             }
