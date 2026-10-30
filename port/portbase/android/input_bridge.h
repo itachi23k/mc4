@@ -10,6 +10,7 @@ struct so_module;
  * AInputQueue/native_app_glue, so SDL events have to be delivered explicitly
  * by the loader's frame loop.
  */
+bool android_input_inject_text(const char *text);
 void android_input_init(so_module *mod, _JNIEnv *env, int width, int height);
 bool android_input_event(const SDL_Event *event);
 void android_input_tick(void);
