@@ -1205,26 +1205,6 @@ static std::string filter_extensions(const std::string &all)
     return out;
 }
 
-    std::string out;
-    size_t pos = 0;
-    while (pos < all.size()) {
-        size_t end = all.find(' ', pos);
-        if (end == std::string::npos)
-            end = all.size();
-        std::string tok = all.substr(pos, end - pos);
-        for (int i = 0; kKeep[i]; i++) {
-            if (tok == kKeep[i]) {
-                if (!out.empty())
-                    out += ' ';
-                out += tok;
-                break;
-            }
-        }
-        pos = end + 1;
-    }
-    return out;
-}
-
 static const GLubyte *gb_glGetString(GLenum name)
 {
     static std::map<GLenum, std::string> cache;
