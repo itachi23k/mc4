@@ -178,6 +178,58 @@ static void Lib_SwapBuffer(JNIEnv *env, jclass clazz)
 
 #include "glf_gen.inc"
 
+// ================== TECLADO (IME) ==================
+static char g_keyboard_text[256] = "";
+static bool g_keyboard_visible = false;
+
+static void Lib_ShowKeyboard(JNIEnv *env, jclass c, jint type, jstring currentText, jint maxLength) {
+    (void)c; (void)type;
+    const char *cur = currentText ? ((String *)currentText)->str : "";
+    snprintf(g_keyboard_text, sizeof(g_keyboard_text), "%s", cur);
+    g_keyboard_visible = true;
+
+    // Salva a requisição na pasta ctl/ para o MainActivity ler e abrir o Gboard
+    const char *ctrl_dir = getenv("MC4_CONTROL_DIR");
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "%s/keyboard_request", ctrl_dir ? ctrl_dir : ".");
+    FILE *f = fopen(path, "w");
+    if (f) {
+        fprintf(f, "%s\n%d\n", cur, maxLength);
+        fclose(f);
+    }
+    trace("keyboard: ShowKeyboard current='%s' max=%d", cur, maxLength);
+}
+
+static jint Lib_IsKeyboardVisible(JNIEnv *env, jclass c) {
+    (void)env; (void)c;
+    return g_keyboard_visible ? 1 : 0;
+}
+
+static jbyteArray Lib_GetKeyboardText(JNIEnv *env, jclass c) {
+    (void)c;
+    g_keyboard_visible = false;
+    
+    // Deleta a requisição
+    const char *ctrl_dir = getenv("MC4_CONTROL_DIR");
+    char path[PATH_MAX];
+    snprintf(path, sizeof(path), "%s/keyboard_request", ctrl_dir ? ctrl_dir : ".");
+    remove(path);
+
+    int len = strlen(g_keyboard_text);
+    jbyteArray arr = env->NewByteArray(len);
+    env->SetByteArrayRegion(arr, 0, len, (const jbyte*)g_keyboard_text);
+    trace("keyboard: GetKeyboardText -> '%s'", g_keyboard_text);
+    return arr;
+}
+
+extern "C" void mc4_update_keyboard_text(const char* text) {
+    if (text) {
+        snprintf(g_keyboard_text, sizeof(g_keyboard_text), "%s", text);
+        g_keyboard_visible = false; // Muda para falso para o jogo entender que confirmou
+    }
+}
+// ====================================================
+
 #define MC4_GLF_METHODS                                                         \
     M(Lib_getResource,         "getResource",             "(" STR ")[B"),       \
     M(Lib_setupPaths,          "setupPaths",              "()V"),               \
