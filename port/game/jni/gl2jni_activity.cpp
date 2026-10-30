@@ -244,6 +244,9 @@ extern "C" void mc4_update_keyboard_text(const char* text) {
     M(Lib_exitGame,            "exitGame",                "()V"),               \
     M(Lib_SwapBuffer,          "SwapBuffer",              "()V"),               \
     M(Lib_getDeviceLanguage,   "getDeviceLanguage",       "()" STR),            \
+    M(Lib_ShowKeyboard,        "ShowKeyboard",            "(I" STR "I)V"),      \
+    M(Lib_IsKeyboardVisible,   "IsKeyboardVisible",       "()I"),               \
+    M(Lib_GetKeyboardText,     "GetKeyboardText",         "()[B"),              \
     GLF_GEN_METHODS                                                             \
     {NULL}
 
