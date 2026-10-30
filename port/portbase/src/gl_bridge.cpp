@@ -1156,20 +1156,69 @@ static GLboolean gb_glIsShader(GLuint shader) { return shader != 0; }
 
 /* ------------------------------------------------------------ queries */
 
-/* Only extensions whose entry points the bridge can serve are advertised. */
+/* Only extensions whose entry points the bridge can serve are advertised.
+ *
+ * The host (Adreno/Mali, GLES 3.0+) exposes far more than this list. What is
+ * kept here is what the engine can actually use through the bridge:
+ *  - ASTC (KHR/OES) — the engine ships ASTC-compressed textures; without it the
+ *    guest falls back to ETC1 and decodes on the CPU (huge, slow, low quality).
+ *  - sRGB (EXT_sRGB, EXT_sRGB_write_control, EXT_texture_sRGB_decode,
+ *    EXT_texture_format_sRGB_override) — gamma-correct framebuffer and
+ *    textures; without it colours look linear and washed out.
+ *  - float/half-float render targets — HDR, bloom and tone mapping.
+ *  - MSAA render-to-texture — edge anti-aliasing.
+ *  - cubemap arrays and texture buffers — environment reflections, large uniforms.
+ * Every one of these was confirmed present in the phone's GL_EXTENSIONS
+ * (see mc4.log, "gl bridge: host extensions"); if a driver lacks one, the
+ * string is simply not advertised and the engine falls back as before.
+ */
 static std::string filter_extensions(const std::string &all)
 {
     static const char *const kKeep[] = {
+        /* --- compression: ETC1 baseline, plus ASTC for quality --- */
         "GL_OES_compressed_ETC1_RGB8_texture", "GL_EXT_texture_compression_s3tc",
         "GL_EXT_texture_compression_dxt1", "GL_AMD_compressed_ATC_texture",
-        "GL_ATI_texture_compression_atitc", "GL_OES_depth_texture", "GL_OES_depth24",
-        "GL_OES_packed_depth_stencil", "GL_OES_rgb8_rgba8", "GL_OES_standard_derivatives",
-        "GL_OES_element_index_uint", "GL_EXT_texture_filter_anisotropic", "GL_OES_texture_half_float",
-        "GL_OES_texture_half_float_linear", "GL_OES_texture_float", "GL_OES_texture_float_linear",
-        "GL_EXT_texture_format_BGRA8888", "GL_EXT_blend_minmax", "GL_OES_mapbuffer", "GL_OES_texture_3D",
-        "GL_EXT_discard_framebuffer", "GL_EXT_shader_framebuffer_fetch", "GL_OES_fbo_render_mipmap",
+        "GL_ATI_texture_compression_atitc",
+        "GL_KHR_texture_compression_astc_ldr",
+        "GL_KHR_texture_compression_astc_hdr",
+        "GL_OES_texture_compression_astc",
+
+        /* --- depth / stencil formats --- */
+        "GL_OES_depth_texture", "GL_OES_depth24", "GL_OES_packed_depth_stencil",
+
+        /* --- core useful bits the engine probes for --- */
+        "GL_OES_rgb8_rgba8", "GL_OES_standard_derivatives",
+        "GL_OES_element_index_uint", "GL_EXT_texture_filter_anisotropic",
+        "GL_OES_texture_half_float", "GL_OES_texture_half_float_linear",
+        "GL_OES_texture_float", "GL_OES_texture_float_linear",
+        "GL_EXT_texture_format_BGRA8888", "GL_EXT_blend_minmax",
+        "GL_OES_mapbuffer", "GL_OES_texture_3D", "GL_OES_fbo_render_mipmap",
+        "GL_OES_vertex_array_object",
+
+        /* --- sRGB: gamma correct output and texture decode --- */
+        "GL_EXT_sRGB", "GL_EXT_sRGB_write_control",
+        "GL_EXT_texture_sRGB_decode", "GL_EXT_texture_format_sRGB_override",
+
+        /* --- render targets: HDR / bloom / tone mapping --- */
+        "GL_EXT_color_buffer_float", "GL_EXT_color_buffer_half_float",
+
+        /* --- MSAA on render-to-texture: edges --- */
+        "GL_EXT_multisampled_render_to_texture",
+        "GL_EXT_multisampled_render_to_texture2",
+
+        /* --- cubemap arrays, texture buffers, norm16 --- */
+        "GL_EXT_texture_cube_map_array", "GL_EXT_texture_buffer",
+        "GL_EXT_texture_norm16",
+
+        /* --- packed normals --- */
+        "GL_EXT_texture_type_2_10_10_10_REV",
+
+        /* --- discard: keeps working, already used by the engine --- */
+        "GL_EXT_discard_framebuffer", "GL_EXT_shader_framebuffer_fetch",
+
         NULL,
     };
+
     std::string out;
     size_t pos = 0;
     while (pos < all.size()) {
