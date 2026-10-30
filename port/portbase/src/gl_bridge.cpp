@@ -1188,8 +1188,11 @@ static std::string filter_extensions(const std::string &all)
         "GL_OES_depth_texture_cube_map", // Importante para as Shadow Maps em cubo
 
         /* --- core useful bits the engine probes for --- */
-        "GL_OES_rgb8_rgba8", "GL_OES_standard_derivatives",
-        "GL_OES_element_index_uint", "GL_EXT_texture_filter_anisotropic",
+        "GL_EXT_shader_texture_lod",
+        "GL_EXT_shadow_samplers",
+        "GL_OES_standard_derivatives", // já está, mas garanta que esteja
+        "GL_EXT_frag_depth",
+        "GL_OES_element_index_uint",
         "GL_OES_texture_half_float", "GL_OES_texture_half_float_linear",
         "GL_OES_texture_float", "GL_OES_texture_float_linear",
         "GL_EXT_texture_format_BGRA8888", "GL_EXT_blend_minmax",
