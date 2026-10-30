@@ -862,7 +862,7 @@ final class GlBridge implements Runnable {
         } else {
             log.log("attach: surface is null");
         }
-    }
+    
                 // Viewport is owned by the guest (OP_glViewport, MC4_WIDTH/MC4_HEIGHT).
                 // Forcing it here breaks framing and sharpness.
             } else {
