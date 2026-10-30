@@ -167,6 +167,20 @@ public final class SettingsActivity extends Activity {
                 "Taxa de atualização da tela e limite máximo de FPS."));
         col.addView(toggle("Contador de FPS", "FPS_COUNTER", true, "Exibe um pequeno contador verde em tempo real no topo da tela."));
 
+                // ---- PÓS-PROCESSAMENTO (roda na GPU real, fora do qemu — ganho visual sem custo de emulação) ----
+        col.addView(section("Pós-processamento"));
+        col.addView(toggle("Nitidez Adaptativa (CAS)", "MC4_POST_PROCESS", false,
+                "Aplica nitidez adaptativa na imagem final usando a GPU real do celular.\n"
+              + "Reduz o borrão de upscale sem custo no qemu (~0.5 ms/quadro).\n"
+              + "É especialmente útil quando RENDER_HEIGHT é menor que o painel.\n"
+              + "Não altera sombras/LOD/culling — só a nitidez da imagem final."));
+
+        col.addView(choice("Intensidade do CAS", "MC4_POST_STRENGTH",
+                new int[] { 5, 8, 10, 12, 15 },
+                new String[] { "0.5×", "0.8×", "1.0×", "1.2×", "1.5×" }, 10, "",
+                "Quanto maior, mais nítido — e mais artefatos em bordas fortes.\n"
+              + "1.0× é o ponto de equilíbrio."));
+
         // ---- APARÊNCIA AVANÇADA (spoof de GPU — único knob real de qualidade da engine) ----
         col.addView(section("Aparência Avançada"));
         col.addView(textInput("Nome da GPU (spoof)", "MC4_GL_RENDERER", "",
