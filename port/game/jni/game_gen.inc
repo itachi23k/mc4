@@ -43,7 +43,13 @@ static void Game_gen_41(JNIEnv *env, jclass c, jint a0) { (void)env; GEN_SAID("s
 static void Game_gen_42(JNIEnv *env, jclass c, jboolean a0) { (void)env; GEN_SAID("setOrientationEnabled(Z)V");  }
 static void Game_gen_43(JNIEnv *env, jclass c, jint a0) { (void)env; GEN_SAID("setSkipPurgeBuffers(I)V");  }
 static void Game_gen_44(JNIEnv *env, jclass c, jboolean a0, jfloat a1, jfloat a2) { (void)env; GEN_SAID("showGPGSButton(ZFF)V");  }
-static void Game_gen_45(JNIEnv *env, jclass c, jint a0, jint a1) { (void)env; GEN_SAID("showKeyboard(II)V");  }
+static void Lib_ShowKeyboard(JNIEnv *env, jclass c, jint type, jstring currentText, jint maxLength);
+
+static void Game_gen_45(JNIEnv *env, jclass c, jint a0, jint a1) {
+    (void)env; (void)c;
+    GEN_SAID("showKeyboard(II)V");
+    Lib_ShowKeyboard(env, c, a0, NULL, a1);
+}
 static void Game_gen_46(JNIEnv *env, jclass c, jboolean a0) { (void)env; GEN_SAID("showKindleBar(Z)V");  }
 static void Game_gen_47(JNIEnv *env, jclass c, jint a0) { (void)env; GEN_SAID("showParentButton(I)V");  }
 static void Game_gen_48(JNIEnv *env, jclass c, jint a0) { (void)env; GEN_SAID("showloading(I)V");  }
