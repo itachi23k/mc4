@@ -80,13 +80,17 @@ final class GlBridge implements Runnable {
         /** Size of the current window surface (panel). Queried lazily in runPostProcess. */
     private int surfaceWidth, surfaceHeight;
 
-    // ---------------------------------------------------------------- post-process (CAS)
+    // ---------------------------------------------------------------- post-process (Color Grading & Curves)
     private volatile boolean ppEnabled;
-    private volatile float ppStrength = 1.0f;
-    private int ppFbo, ppTex, ppDepthStencil;
-    private int ppWidth, ppHeight;          // FBO dimensions = render dims
+    private volatile float ppSaturation = 1.25f;
+    private volatile float ppContrast = 1.15f;
+    private volatile float ppGamma = 0.90f;
+    private volatile float ppSharpen = 0.35f;
+    private int ppTex;
+    private int ppWidth, ppHeight;          // Dimensões do buffer de tela
     private int ppProgram, ppVbo, ppVao;
-    private int ppTexUniform, ppResUniform, ppStrengthUniform;
+    private int ppTexUniform, ppResUniform;
+    private int ppSatUniform, ppConUniform, ppGamUniform, ppShpUniform;
     private boolean ppReady;
 
 
@@ -161,12 +165,22 @@ final class GlBridge implements Runnable {
     }
 
 
-        /** Enables CAS post-processing at the given strength (0.5..1.5 recommended). */
-    void setPostProcess(boolean enabled, float strength) {
+    /**
+     * Configura o pipeline de pós-processamento (Color Grading, Curvas de Contraste e Nitidez).
+     */
+    void setColorGrading(boolean enabled, float saturation, float contrast, float gamma, float sharpen) {
         this.ppEnabled = enabled;
-        if (strength > 0.1f && strength <= 3.0f) this.ppStrength = strength;
-        log.log("GlBridge post-process " + (enabled ? "enabled" : "disabled")
-                + (enabled ? " (strength " + strength + ")" : ""));
+        this.ppSaturation = saturation;
+        this.ppContrast = contrast;
+        this.ppGamma = gamma;
+        this.ppSharpen = sharpen;
+        log.log("GlBridge color grading " + (enabled ? "enabled" : "disabled")
+                + " (sat=" + saturation + ", con=" + contrast + ", gam=" + gamma + ", shp=" + sharpen + ")");
+    }
+
+    /** Retrocompatibilidade */
+    void setPostProcess(boolean enabled, float strength) {
+        setColorGrading(enabled, 1.25f, 1.15f, 0.90f, strength > 0 ? strength : 0.35f);
     }
 
 
@@ -412,23 +426,8 @@ final class GlBridge implements Runnable {
 
     private static int[] one() { return new int[1]; }
 
-        private void dispatch(int op, int plen) {
+    private void dispatch(int op, int plen) {
         ByteBuffer b = pay;
-
-        // Redirect the game's default framebuffer (0) to the intermediate FBO when
-        // post-processing is on. Queries for GL_FRAMEBUFFER_BINDING still return 0.
-        if (ppEnabled && op == GlOps.OP_glBindFramebuffer) {
-            int mark = b.position();
-            int target = b.getInt(mark);
-            int fbId = b.getInt(mark + 4);
-            if (target == GLES30.GL_FRAMEBUFFER && fbId == 0) {
-                if (!ppReady) ensurePostProcess(renderWidth, renderHeight);
-                if (ppReady) {
-                    GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, ppFbo);
-                    return;
-                }
-            }
-        }
 
         if (GlOps.exec(op, b, ids)) return;
         switch (op) {
@@ -849,7 +848,7 @@ final class GlBridge implements Runnable {
         reply(bo.toByteArray());
     }
 
-            // ------------------------------------------------------------ post-processing
+            // ------------------------------------------------------------ post-processing (Color Grading & Curves)
 
     private void ensurePostProcess(int w, int h) {
         if (w <= 0 || h <= 0) return;
@@ -860,7 +859,7 @@ final class GlBridge implements Runnable {
         GLES30.glGenTextures(1, t, 0);
         ppTex = t[0];
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, ppTex);
-        GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA8, w, h, 0,
+        GLES30.glTexImage2D(GLES30.GL_TEXTURE_2D, 0, GLES30.GL_RGBA, w, h, 0,
                 GLES30.GL_RGBA, GLES30.GL_UNSIGNED_BYTE, null);
         GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MIN_FILTER, GLES30.GL_LINEAR);
         GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_MAG_FILTER, GLES30.GL_LINEAR);
@@ -868,41 +867,18 @@ final class GlBridge implements Runnable {
         GLES30.glTexParameteri(GLES30.GL_TEXTURE_2D, GLES30.GL_TEXTURE_WRAP_T, GLES30.GL_CLAMP_TO_EDGE);
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0);
 
-        int[] rb = new int[1];
-        GLES30.glGenRenderbuffers(1, rb, 0);
-        ppDepthStencil = rb[0];
-        GLES30.glBindRenderbuffer(GLES30.GL_RENDERBUFFER, ppDepthStencil);
-        GLES30.glRenderbufferStorage(GLES30.GL_RENDERBUFFER, GLES30.GL_DEPTH24_STENCIL8, w, h);
-        GLES30.glBindRenderbuffer(GLES30.GL_RENDERBUFFER, 0);
-
-        int[] f = new int[1];
-        GLES30.glGenFramebuffers(1, f, 0);
-        ppFbo = f[0];
-        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, ppFbo);
-        GLES30.glFramebufferTexture2D(GLES30.GL_FRAMEBUFFER, GLES30.GL_COLOR_ATTACHMENT0,
-                GLES30.GL_TEXTURE_2D, ppTex, 0);
-        GLES30.glFramebufferRenderbuffer(GLES30.GL_FRAMEBUFFER, GLES30.GL_DEPTH_STENCIL_ATTACHMENT,
-                GLES30.GL_RENDERBUFFER, ppDepthStencil);
-        int st = GLES30.glCheckFramebufferStatus(GLES30.GL_FRAMEBUFFER);
-        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
-
-        if (st != GLES30.GL_FRAMEBUFFER_COMPLETE) {
-            log.log("ppFbo incomplete: 0x" + Integer.toHexString(st));
-            return;
-        }
         if (!buildPostProcessProgram()) return;
         buildQuad();
 
         ppWidth = w;
         ppHeight = h;
         ppReady = true;
-        log.log("post-process ready: FBO " + w + "x" + h + ", strength " + ppStrength);
+        log.log(String.format(Locale.US, "GlBridge color grading ready: %dx%d (sat=%.2f, con=%.2f, gam=%.2f, shp=%.2f)",
+                w, h, ppSaturation, ppContrast, ppGamma, ppSharpen));
     }
 
     private void destroyPostProcess() {
-        if (ppFbo != 0) { GLES30.glDeleteFramebuffers(1, new int[]{ppFbo}, 0); ppFbo = 0; }
         if (ppTex != 0) { GLES30.glDeleteTextures(1, new int[]{ppTex}, 0); ppTex = 0; }
-        if (ppDepthStencil != 0) { GLES30.glDeleteRenderbuffers(1, new int[]{ppDepthStencil}, 0); ppDepthStencil = 0; }
         if (ppProgram != 0) { GLES30.glDeleteProgram(ppProgram); ppProgram = 0; }
         if (ppVbo != 0) { GLES30.glDeleteBuffers(1, new int[]{ppVbo}, 0); ppVbo = 0; }
         if (ppVao != 0) { GLES30.glDeleteVertexArrays(1, new int[]{ppVao}, 0); ppVao = 0; }
@@ -924,27 +900,41 @@ final class GlBridge implements Runnable {
             "precision highp float;\n" +
             "uniform sampler2D uTex;\n" +
             "uniform vec2 uRes;\n" +
-            "uniform float uStrength;\n" +
+            "uniform float uSaturation;\n" +
+            "uniform float uContrast;\n" +
+            "uniform float uGamma;\n" +
+            "uniform float uSharpen;\n" +
             "in vec2 vUv;\n" +
             "out vec4 fragColor;\n" +
-            "vec3 F(vec2 uv) { return texture(uTex, uv).rgb; }\n" +
+            "vec3 toneCurve(vec3 x) {\n" +
+            "    return x * x * (3.0 - 2.0 * x);\n" +
+            "}\n" +
             "void main() {\n" +
             "    vec2 px = 1.0 / uRes;\n" +
-            "    vec3 c  = F(vUv);\n" +
-            "    vec3 n  = F(vUv + vec2( 0.0, -px.y));\n" +
-            "    vec3 s  = F(vUv + vec2( 0.0,  px.y));\n" +
-            "    vec3 w  = F(vUv + vec2(-px.x,  0.0));\n" +
-            "    vec3 e  = F(vUv + vec2( px.x,  0.0));\n" +
-            "    vec3 nw = F(vUv + vec2(-px.x, -px.y));\n" +
-            "    vec3 ne = F(vUv + vec2( px.x, -px.y));\n" +
-            "    vec3 sw = F(vUv + vec2(-px.x,  px.y));\n" +
-            "    vec3 se = F(vUv + vec2( px.x,  px.y));\n" +
-            "    vec3 mn = min(min(min(nw, n), min(ne, w)), min(min(c, e), min(min(sw, s), se)));\n" +
-            "    vec3 mx = max(max(max(nw, n), max(ne, w)), max(max(c, e), max(max(sw, s), se)));\n" +
-            "    vec3 blur = (nw + n + ne + w + e + sw + s + se) * 0.125;\n" +
-            "    vec3 sharpened = c + (c - blur) * uStrength;\n" +
-            "    sharpened = clamp(sharpened, mn, mx);\n" +
-            "    fragColor = vec4(sharpened, 1.0);\n" +
+            "    vec3 c = texture(uTex, vUv).rgb;\n" +
+            "    if (uSharpen > 0.01) {\n" +
+            "        vec3 n  = texture(uTex, vUv + vec2(0.0, -px.y)).rgb;\n" +
+            "        vec3 s  = texture(uTex, vUv + vec2(0.0,  px.y)).rgb;\n" +
+            "        vec3 w  = texture(uTex, vUv + vec2(-px.x, 0.0)).rgb;\n" +
+            "        vec3 e  = texture(uTex, vUv + vec2( px.x, 0.0)).rgb;\n" +
+            "        vec3 blur = (n + s + w + e) * 0.25;\n" +
+            "        vec3 mn = min(min(n, s), min(w, e));\n" +
+            "        vec3 mx = max(max(n, s), max(w, e));\n" +
+            "        c = clamp(c + (c - blur) * uSharpen, mn, mx);\n" +
+            "    }\n" +
+            "    if (abs(uContrast - 1.0) > 0.01) {\n" +
+            "        c = (c - 0.5) * uContrast + 0.5;\n" +
+            "        c = clamp(c, 0.0, 1.0);\n" +
+            "        c = mix(c, toneCurve(c), 0.25);\n" +
+            "    }\n" +
+            "    if (abs(uSaturation - 1.0) > 0.01) {\n" +
+            "        float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));\n" +
+            "        c = mix(vec3(luma), c, uSaturation);\n" +
+            "    }\n" +
+            "    if (abs(uGamma - 1.0) > 0.01) {\n" +
+            "        c = pow(max(c, vec3(0.0)), vec3(uGamma));\n" +
+            "    }\n" +
+            "    fragColor = vec4(clamp(c, 0.0, 1.0), 1.0);\n" +
             "}\n";
 
     private boolean buildPostProcessProgram() {
@@ -986,7 +976,10 @@ final class GlBridge implements Runnable {
 
         ppTexUniform = GLES30.glGetUniformLocation(ppProgram, "uTex");
         ppResUniform = GLES30.glGetUniformLocation(ppProgram, "uRes");
-        ppStrengthUniform = GLES30.glGetUniformLocation(ppProgram, "uStrength");
+        ppSatUniform = GLES30.glGetUniformLocation(ppProgram, "uSaturation");
+        ppConUniform = GLES30.glGetUniformLocation(ppProgram, "uContrast");
+        ppGamUniform = GLES30.glGetUniformLocation(ppProgram, "uGamma");
+        ppShpUniform = GLES30.glGetUniformLocation(ppProgram, "uSharpen");
         return true;
     }
 
@@ -1011,7 +1004,7 @@ final class GlBridge implements Runnable {
     }
 
     private void runPostProcess() {
-        if (!ppReady || ppProgram == 0) return;
+        if (!ppEnabled) return;
 
         if (surfaceWidth == 0 || surfaceHeight == 0) {
             int[] w = new int[1], h = new int[1];
@@ -1019,12 +1012,24 @@ final class GlBridge implements Runnable {
             EGL14.eglQuerySurface(dpy, window, EGL14.EGL_HEIGHT, h, 0);
             surfaceWidth = w[0];
             surfaceHeight = h[0];
-            log.log("post-process viewport: panel " + surfaceWidth + "x" + surfaceHeight
-                    + ", FBO " + ppWidth + "x" + ppHeight);
+        }
+        int w = surfaceWidth > 0 ? surfaceWidth : renderWidth;
+        int h = surfaceHeight > 0 ? surfaceHeight : renderHeight;
+        if (w <= 0 || h <= 0) return;
+
+        if (!ppReady || ppWidth != w || ppHeight != h) {
+            ensurePostProcess(w, h);
+            if (!ppReady) return;
         }
 
+        // Copia o backbuffer já renderizado pela engine para a nossa textura
+        GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, 0);
+        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, ppTex);
+        GLES30.glCopyTexSubImage2D(GLES30.GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+
+        // Renderiza o quad aplicando Color Grading e Curvas de Tom
         GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
-        GLES30.glViewport(0, 0, surfaceWidth, surfaceHeight);
+        GLES30.glViewport(0, 0, w, h);
         GLES30.glDisable(GLES30.GL_DEPTH_TEST);
         GLES30.glDisable(GLES30.GL_STENCIL_TEST);
         GLES30.glDisable(GLES30.GL_BLEND);
@@ -1036,8 +1041,11 @@ final class GlBridge implements Runnable {
         GLES30.glActiveTexture(GLES30.GL_TEXTURE0);
         GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, ppTex);
         GLES30.glUniform1i(ppTexUniform, 0);
-        GLES30.glUniform2f(ppResUniform, (float) ppWidth, (float) ppHeight);
-        GLES30.glUniform1f(ppStrengthUniform, ppStrength);
+        GLES30.glUniform2f(ppResUniform, (float) w, (float) h);
+        GLES30.glUniform1f(ppSatUniform, ppSaturation);
+        GLES30.glUniform1f(ppConUniform, ppContrast);
+        GLES30.glUniform1f(ppGamUniform, ppGamma);
+        GLES30.glUniform1f(ppShpUniform, ppSharpen);
 
         GLES30.glBindVertexArray(ppVao);
         GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 3);
@@ -1146,7 +1154,7 @@ final class GlBridge implements Runnable {
         if (window != EGL14.EGL_NO_SURFACE) {
             // Viewport is owned by the guest; forcing it here breaks sharpness.
             pace();
-            if (ppEnabled && ppReady) runPostProcess();
+            if (ppEnabled) runPostProcess();
             if (!EGL14.eglSwapBuffers(dpy, window)) {
                 log.log("eglSwapBuffers failed: 0x" + Integer.toHexString(EGL14.eglGetError()));
                 EGL14.eglMakeCurrent(dpy, pbuf, pbuf, ctx);
