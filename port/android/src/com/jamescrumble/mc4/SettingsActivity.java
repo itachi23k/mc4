@@ -190,6 +190,35 @@ public final class SettingsActivity extends Activity {
               + "Equivale a colocar gpu_name.txt na pasta do jogo (o valor daqui ganha do arquivo)."));
 
         // ---- CRÉDITOS ----
+                col.addView(section("Instalação"));
+        col.addView(toggle(
+                "Baixar dados do jogo",
+                // Não é uma chave real de settings; é um "botão-toggle" que dispara uma ação.
+                // Implementado abaixo como um botão simples em vez de Switch.
+                "__noop__", false,
+                "Baixa o APK e os OBBs de uma pasta pública do Google Drive " +
+                "direto para a pasta do jogo. Precisa de internet."));
+
+        Button downloadBtn = button("Baixar do Google Drive");
+        downloadBtn.setOnClickListener(v -> {
+            if (DriveDownloader.allPresent(this)) {
+                Toast.makeText(this, "Os arquivos já estão na pasta do jogo.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            new AlertDialog.Builder(this)
+                    .setTitle("Baixar dados do jogo")
+                    .setMessage("Vai baixar o APK e os OBBs (~1.5 GB) de uma pasta pública.\n\n" +
+                                "Recomendado estar no Wi-Fi. O download continua mesmo se você sair do app.")
+                    .setPositiveButton("Baixar", (d, w) -> DriveDownloader.downloadAll(this))
+                    .setNegativeButton("Cancelar", null)
+                    .show();
+        });
+        col.addView(downloadBtn, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        
+
+
+        
         col.addView(section("Créditos e Moedas"));
         col.addView(toggle("Créditos Infinitos", "MC4_MONEY_INFINITE", false,
                 "Exibe 9.999.999 créditos e compras não debitam. O saldo real é preservado ao desativar."));
