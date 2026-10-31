@@ -126,6 +126,86 @@ public final class DriveDownloader {
                 .show();
     }
 
+        // Container da barra de progresso (invisível por padrão).
+        LinearLayout progressBox = new LinearLayout(this);
+        progressBox.setOrientation(LinearLayout.VERTICAL);
+        progressBox.setPadding(0, px(12), 0, 0);
+        progressBox.setVisibility(View.GONE);
+
+        // Uma linha por arquivo: nome + barra + percentual.
+        final TextView[] labels = new TextView[3];
+        final ProgressBar[] bars = new ProgressBar[3];
+        final TextView[] percents = new TextView[3];
+        for (int i = 0; i < 3; i++) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.VERTICAL);
+
+            labels[i] = text("", 12, FG, false);
+            bars[i] = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+            bars[i].setMax(100);
+            percents[i] = text("0%", 11, DIM, false);
+
+            row.addView(labels[i]);
+            row.addView(bars[i]);
+            row.addView(percents[i]);
+            progressBox.addView(row);
+        }
+        col.addView(progressBox);
+
+        // Referência mutável para o runnable (precisa se re-postar).
+        final boolean[] polling = { false };
+        final Runnable[] poll = new Runnable[1];
+        poll[0] = () -> {
+            if (!polling[0]) return;
+            DriveDownloader.Progress[] ps = DriveDownloader.snapshot(this);
+            boolean anyActive = false;
+            for (int i = 0; i < ps.length; i++) {
+                DriveDownloader.Progress p = ps[i];
+                labels[i].setText(p.name);
+                bars[i].setProgress(p.percent());
+                percents[i].setText(p.percent() + "%  ("
+                        + humanSize(p.bytesDone) + " / " + humanSize(p.bytesTotal) + ")");
+                if (p.isActive()) anyActive = true;
+                if (p.isFailed()) percents[i].setText("Falhou. Verifique a conexão.");
+                if (p.isDone())  percents[i].setText("Concluído (" + humanSize(p.bytesTotal) + ")");
+            }
+            if (!anyActive) {
+                polling[0] = false;
+                progressBox.postDelayed(() -> {
+                    if (DriveDownloader.allPresent(this)) {
+                        progressBox.setVisibility(View.GONE);
+                        Toast.makeText(this, "Todos os arquivos baixados! Inicie o jogo.",
+                                Toast.LENGTH_LONG).show();
+                    }
+                }, 500);
+                return;
+            }
+            progressBox.postDelayed(poll[0], 1000);
+        };
+
+        downloadBtn.setOnClickListener(v -> {
+            if (DriveDownloader.allPresent(this)) {
+                Toast.makeText(this, "Os arquivos já estão na pasta do jogo.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (!Storage.hasAccess(this)) {
+                Toast.makeText(this, "Conceda acesso a todos os arquivos primeiro.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            new AlertDialog.Builder(this)
+                    .setTitle("Baixar dados do jogo")
+                    .setMessage("Vai baixar o APK e os OBBs (~1.5 GB) de uma pasta pública.\n\n"
+                            + "Recomendado estar no Wi-Fi. O download continua mesmo se você sair do app.")
+                    .setPositiveButton("Baixar", (d, w) -> {
+                        progressBox.setVisibility(View.VISIBLE);
+                        DriveDownloader.downloadAll(this);
+                        polling[0] = true;
+                        progressBox.post(poll[0]);
+                    })
+                    .setNegativeButton("Cancelar", null)
+                    .show();
+        });
+    
     /** True quando todos os arquivos já estão no disco com tamanho plausível. */
     public static boolean allPresent(Context c) {
         File dir = targetDir(c);
