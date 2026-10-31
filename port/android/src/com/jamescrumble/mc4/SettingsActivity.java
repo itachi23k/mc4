@@ -58,11 +58,15 @@ public final class SettingsActivity extends Activity {
     private TextView folderInfo, versionInfo;
     private boolean hadAccess, asked;
 
-    // ---- barra de progresso do download (Google Drive) ----
-    private LinearLayout dlBox;
-    private TextView[] dlLabels;
-    private ProgressBar[] dlBars;
-    private TextView[] dlPercents;
+    // ---- cards customizados de download individual ----
+    private LinearLayout dlContainer;
+    private TextView dlSummaryText;
+    private Button dlAllBtn;
+    private final TextView[] dlCardTitles = new TextView[3];
+    private final TextView[] dlCardBadges = new TextView[3];
+    private final TextView[] dlCardSubtexts = new TextView[3];
+    private final ProgressBar[] dlCardBars = new ProgressBar[3];
+    private final Button[] dlCardActionBtns = new Button[3];
     private boolean dlPolling;
     private Runnable dlPoll;
     private BroadcastReceiver dlReceiver;
@@ -148,129 +152,9 @@ public final class SettingsActivity extends Activity {
         // ---- INSTALAÇÃO (download do Google Drive) ----
         col.addView(section("Instalação"));
         col.addView(text(
-                "Baixa o APK e os OBBs da pasta pública do Google Drive para a pasta do jogo.",
+                "Baixe o APK e os arquivos de cache (OBBs) individualmente ou todos de uma vez.",
                 12, DIM, false));
-
-        // Container das barras de progresso. Fica GONE até começar um download.
-        dlBox = new LinearLayout(this);
-        dlBox.setOrientation(LinearLayout.VERTICAL);
-        dlBox.setPadding(0, px(12), 0, 0);
-        dlBox.setVisibility(View.GONE);
-
-        dlLabels = new TextView[3];
-        dlBars = new ProgressBar[3];
-        dlPercents = new TextView[3];
-        for (int i = 0; i < 3; i++) {
-            LinearLayout row = new LinearLayout(this);
-            row.setOrientation(LinearLayout.VERTICAL);
-            row.setPadding(0, px(8), 0, px(4));
-
-            dlLabels[i] = text("", 12, FG, false);
-            dlBars[i] = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-            dlBars[i].setMax(100);
-            dlBars[i].setProgress(0);
-            dlPercents[i] = text("0%", 11, DIM, false);
-
-            row.addView(dlLabels[i]);
-            row.addView(dlBars[i]);
-            row.addView(dlPercents[i]);
-            dlBox.addView(row);
-        }
-        col.addView(dlBox);
-
-                Button downloadBtn = button("Baixar do Google Drive");
-        downloadBtn.setOnClickListener(v -> {
-            try {
-                if (DriveDownloader.allPresent(this)) {
-                    Toast.makeText(this, "Os arquivos já estão na pasta do jogo.", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-                if (!Storage.hasAccess(this)) {
-                    new AlertDialog.Builder(this)
-                            .setTitle("Acesso a Todos os Arquivos")
-                            .setMessage("Para armazenar os dados do jogo (~1.5 GB) em BridgeGames, conceda a permissão de acesso aos arquivos.")
-                            .setPositiveButton("Conceder Acesso", (d, w) -> Storage.requestAccess(this, 2))
-                            .setNegativeButton("Cancelar", null)
-                            .show();
-                    return;
-                }
-
-                // Android 13+ (API 33, 34, 35, 36): pedir permissão de notificações para exibir progresso
-                if (Build.VERSION.SDK_INT >= 33) {
-                    if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                        requestPermissions(new String[]{ Manifest.permission.POST_NOTIFICATIONS }, REQ_NOTIF);
-                    }
-                }
-
-                new AlertDialog.Builder(this)
-                        .setTitle("Baixar dados do jogo")
-                        .setMessage("Vai baixar o APK e os OBBs (~1.5 GB) do Google Drive.\n\n"
-                                + "Recomendado estar no Wi-Fi. O download continua em segundo plano mesmo se você sair do aplicativo.")
-                        .setPositiveButton("Baixar", (d, w) -> {
-                            try {
-                                DriveDownloader.downloadAll(this);
-                                startProgressPolling();
-                            } catch (Exception e) {
-                                Log.e(TAG, "download failed", e);
-                                Toast.makeText(this, "Falha ao iniciar download: " + e.getMessage(),
-                                        Toast.LENGTH_LONG).show();
-                            }
-                        })
-                        .setNegativeButton("Cancelar", null)
-                        .show();
-            } catch (Exception e) {
-                Log.e(TAG, "download button failed", e);
-            }
-        });
-        col.addView(downloadBtn, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
-        // Configurar o poll de progresso (compatível com Android 15 e 16)
-        dlPoll = () -> {
-            if (!dlPolling) return;
-            DriveDownloader.Progress[] ps = DriveDownloader.snapshot(this);
-            boolean anyActive = false;
-            for (int i = 0; i < ps.length && i < dlLabels.length; i++) {
-                DriveDownloader.Progress p = ps[i];
-                dlLabels[i].setText(p.name);
-                dlBars[i].setProgress(p.percent());
-                if (p.isFailed()) {
-                    dlPercents[i].setText("Falhou: " + p.formatReason());
-                } else if (p.isDone()) {
-                    // moveIfFinished tenta copiar via ParcelFileDescriptor, ContentResolver ou Staged
-                    if (DriveDownloader.moveIfFinished(this, p)) {
-                        dlPercents[i].setText("Concluído (" + humanSize(p.bytesTotal) + ")");
-                    } else {
-                        dlPercents[i].setText("Baixado — transferindo para o jogo…");
-                        anyActive = true;
-                    }
-                } else if (p.isActive()) {
-                    if (p.bytesTotal > 0) {
-                        dlPercents[i].setText(p.percent() + "%  ("
-                                + humanSize(p.bytesDone) + " / " + humanSize(p.bytesTotal) + ")");
-                    } else {
-                        dlPercents[i].setText("Baixando… (" + humanSize(p.bytesDone) + ")");
-                    }
-                    anyActive = true;
-                } else {
-                    dlPercents[i].setText("Aguardando…");
-                }
-            }
-            if (!anyActive) {
-                dlPolling = false;
-                if (dlBox != null) {
-                    dlBox.postDelayed(() -> {
-                        if (DriveDownloader.allPresent(this)) {
-                            dlBox.setVisibility(View.GONE);
-                            Toast.makeText(this, "Todos os arquivos baixados! Inicie o jogo.",
-                                    Toast.LENGTH_LONG).show();
-                        }
-                    }, 800);
-                }
-                return;
-            }
-            if (dlBox != null) dlBox.postDelayed(dlPoll, 1000);
-        };
+        col.addView(buildDownloadSection());
 
         // ---- PRESETS ----
         col.addView(section("Presets de Qualidade"));
@@ -402,15 +286,9 @@ public final class SettingsActivity extends Activity {
         hadAccess = now;
         showFolder();
 
-        // Se algum download está ativo, re-ativa o polling na tela.
+        updateDownloadUI();
         if (DriveDownloader.anyActive(this)) {
             startProgressPolling();
-        } else if (!DriveDownloader.allPresent(this)) {
-            // Verificar se algum download terminou em segundo plano enquanto o app estava minimizado
-            DriveDownloader.Progress[] ps = DriveDownloader.snapshot(this);
-            for (DriveDownloader.Progress p : ps) {
-                if (p.isDone()) DriveDownloader.moveIfFinished(this, p);
-            }
         }
     }
 
@@ -418,8 +296,8 @@ public final class SettingsActivity extends Activity {
         super.onDestroy();
         unregisterDownloadReceiver();
         dlPolling = false;
-        if (dlBox != null && dlPoll != null) {
-            dlBox.removeCallbacks(dlPoll);
+        if (dlContainer != null && dlPoll != null) {
+            dlContainer.removeCallbacks(dlPoll);
         }
     }
 
@@ -428,7 +306,10 @@ public final class SettingsActivity extends Activity {
         dlReceiver = new BroadcastReceiver() {
             @Override public void onReceive(Context context, Intent intent) {
                 if (DownloadManager.ACTION_DOWNLOAD_COMPLETE.equals(intent.getAction())) {
-                    runOnUiThread(() -> startProgressPolling());
+                    runOnUiThread(() -> {
+                        updateDownloadUI();
+                        startProgressPolling();
+                    });
                 }
             }
         };
@@ -451,11 +332,299 @@ public final class SettingsActivity extends Activity {
     }
 
     private void startProgressPolling() {
-        if (dlPoll == null) return;
-        dlBox.setVisibility(View.VISIBLE);
+        if (dlPoll == null) {
+            dlPoll = () -> {
+                if (!dlPolling && !DriveDownloader.anyActive(this)) {
+                    updateDownloadUI();
+                    return;
+                }
+                updateDownloadUI();
+                if (dlContainer != null) {
+                    if (DriveDownloader.anyActive(this)) {
+                        dlContainer.postDelayed(dlPoll, 500);
+                    } else {
+                        dlPolling = false;
+                    }
+                }
+            };
+        }
         if (dlPolling) return;
         dlPolling = true;
-        dlBox.post(dlPoll);
+        if (dlContainer != null) {
+            dlContainer.post(dlPoll);
+        }
+    }
+
+    private void requestNotifPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{ Manifest.permission.POST_NOTIFICATIONS }, REQ_NOTIF);
+            }
+        }
+    }
+
+    private android.graphics.drawable.GradientDrawable cardBg(int bg, int stroke) {
+        android.graphics.drawable.GradientDrawable gd = new android.graphics.drawable.GradientDrawable();
+        gd.setColor(bg);
+        gd.setCornerRadius(px(10));
+        gd.setStroke(px(1), stroke);
+        return gd;
+    }
+
+    private android.graphics.drawable.GradientDrawable badgeDrawable(int color) {
+        android.graphics.drawable.GradientDrawable gd = new android.graphics.drawable.GradientDrawable();
+        gd.setColor(color);
+        gd.setCornerRadius(px(12));
+        return gd;
+    }
+
+    private android.graphics.drawable.Drawable createProgressDrawable() {
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(Color.rgb(36, 46, 54));
+        bg.setCornerRadius(px(4));
+
+        android.graphics.drawable.GradientDrawable progress = new android.graphics.drawable.GradientDrawable();
+        progress.setColor(ACCENT);
+        progress.setCornerRadius(px(4));
+        android.graphics.drawable.ClipDrawable clip = new android.graphics.drawable.ClipDrawable(
+                progress, Gravity.START, android.graphics.drawable.ClipDrawable.HORIZONTAL);
+
+        android.graphics.drawable.Drawable[] layers = { bg, clip };
+        android.graphics.drawable.LayerDrawable ld = new android.graphics.drawable.LayerDrawable(layers);
+        ld.setId(0, android.R.id.background);
+        ld.setId(1, android.R.id.progress);
+        return ld;
+    }
+
+    private View buildDownloadSection() {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(px(14), px(14), px(14), px(14));
+        box.setBackground(cardBg(Color.rgb(20, 26, 32), Color.rgb(38, 50, 60)));
+
+        dlSummaryText = text("Verificando arquivos…", 13, ACCENT, true);
+        dlSummaryText.setPadding(0, 0, 0, px(10));
+        box.addView(dlSummaryText);
+
+        dlAllBtn = button("⬇ Baixar Todos os Arquivos Faltantes");
+        dlAllBtn.setOnClickListener(v -> checkPermissionAndDownloadAll());
+        box.addView(dlAllBtn);
+
+        // Lista de cards individuais
+        LinearLayout cardsList = new LinearLayout(this);
+        cardsList.setOrientation(LinearLayout.VERTICAL);
+        cardsList.setPadding(0, px(12), 0, 0);
+
+        for (int i = 0; i < 3; i++) {
+            final int fileIndex = i;
+            DriveDownloader.DriveFile f = DriveDownloader.FILES[i];
+
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(px(12), px(10), px(12), px(10));
+            card.setBackground(cardBg(Color.rgb(26, 34, 42), Color.rgb(45, 60, 72)));
+            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            cardLp.setMargins(0, px(6), 0, px(6));
+            card.setLayoutParams(cardLp);
+
+            // Linha 1: Título do arquivo + Badge de status
+            LinearLayout headerRow = new LinearLayout(this);
+            headerRow.setOrientation(LinearLayout.HORIZONTAL);
+            headerRow.setGravity(Gravity.CENTER_VERTICAL);
+
+            dlCardTitles[i] = text(f.title, 13, FG, true);
+            LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            headerRow.addView(dlCardTitles[i], titleLp);
+
+            dlCardBadges[i] = new TextView(this);
+            dlCardBadges[i].setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+            dlCardBadges[i].setTextColor(Color.WHITE);
+            dlCardBadges[i].setTypeface(dlCardBadges[i].getTypeface(), android.graphics.Typeface.BOLD);
+            dlCardBadges[i].setPadding(px(8), px(3), px(8), px(3));
+            dlCardBadges[i].setGravity(Gravity.CENTER);
+            headerRow.addView(dlCardBadges[i]);
+            card.addView(headerRow);
+
+            // Linha 2: Descrição e tamanho
+            dlCardSubtexts[i] = text(f.name + " • " + humanSize(f.approxSize), 11, DIM, false);
+            dlCardSubtexts[i].setPadding(0, px(4), 0, px(6));
+            card.addView(dlCardSubtexts[i]);
+
+            // Linha 3: Barra de progresso customizada
+            ProgressBar bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+            bar.setMax(100);
+            bar.setProgress(0);
+            bar.setProgressDrawable(createProgressDrawable());
+            LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, px(8));
+            barLp.setMargins(0, px(2), 0, px(8));
+            bar.setLayoutParams(barLp);
+            dlCardBars[i] = bar;
+            card.addView(bar);
+
+            // Linha 4: Botão de ação individual
+            Button btn = new Button(this);
+            btn.setText("Baixar");
+            btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+            btn.setAllCaps(false);
+            btn.setPadding(px(12), px(6), px(12), px(6));
+            btn.setOnClickListener(v -> onCardActionClicked(fileIndex));
+            dlCardActionBtns[i] = btn;
+            card.addView(btn);
+
+            cardsList.addView(card);
+        }
+
+        box.addView(cardsList);
+        dlContainer = box;
+        updateDownloadUI();
+        return box;
+    }
+
+    private void onCardActionClicked(int index) {
+        if (!Storage.hasAccess(this)) {
+            askAccess();
+            return;
+        }
+        requestNotifPermissionIfNeeded();
+        DriveDownloader.Progress[] ps = DriveDownloader.snapshot(this);
+        if (index >= ps.length) return;
+        DriveDownloader.Progress p = ps[index];
+
+        if (p.isDone() || DriveDownloader.haveTarget(this, index)) {
+            Toast.makeText(this, "Arquivo já instalado na pasta do jogo.", Toast.LENGTH_SHORT).show();
+            updateDownloadUI();
+            return;
+        }
+
+        if (p.isActive()) {
+            DriveDownloader.cancelOne(this, index);
+            updateDownloadUI();
+        } else {
+            DriveDownloader.downloadOne(this, index);
+            startProgressPolling();
+        }
+    }
+
+    private void checkPermissionAndDownloadAll() {
+        if (DriveDownloader.allPresent(this)) {
+            Toast.makeText(this, "Todos os arquivos já estão na pasta do jogo.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (!Storage.hasAccess(this)) {
+            askAccess();
+            return;
+        }
+        requestNotifPermissionIfNeeded();
+        new AlertDialog.Builder(this)
+                .setTitle("Baixar Todos os Arquivos")
+                .setMessage("Deseja baixar os arquivos restantes (~1.5 GB)?\n\nRecomendado usar Wi-Fi. Você poderá acompanhar o progresso em tempo real nesta tela.")
+                .setPositiveButton("Baixar Todos", (d, w) -> {
+                    DriveDownloader.downloadAll(this);
+                    startProgressPolling();
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
+    }
+
+    private void updateDownloadUI() {
+        DriveDownloader.Progress[] ps = DriveDownloader.snapshot(this);
+        int installedCount = 0;
+        long totalBytesDone = 0;
+        long totalBytesTotal = 0;
+        boolean anyActive = false;
+
+        for (int i = 0; i < ps.length && i < 3; i++) {
+            DriveDownloader.Progress p = ps[i];
+            DriveDownloader.DriveFile f = DriveDownloader.FILES[i];
+            boolean installed = DriveDownloader.haveTarget(this, i);
+
+            if (installed) {
+                installedCount++;
+                totalBytesDone += (p.bytesTotal > 0 ? p.bytesTotal : f.approxSize);
+                totalBytesTotal += (p.bytesTotal > 0 ? p.bytesTotal : f.approxSize);
+                dlCardBadges[i].setText("✓ Pronto");
+                dlCardBadges[i].setBackground(badgeDrawable(0xff2e7d32));
+                dlCardSubtexts[i].setText(f.name + " • " + humanSize(p.bytesTotal > 0 ? p.bytesTotal : f.approxSize) + " (Instalado)");
+                dlCardBars[i].setProgress(100);
+                dlCardActionBtns[i].setText("✓ Verificado no jogo");
+                dlCardActionBtns[i].setEnabled(false);
+                dlCardActionBtns[i].setAlpha(0.5f);
+            } else if (p.isDone()) {
+                anyActive = true;
+                boolean moved = DriveDownloader.moveIfFinished(this, p);
+                if (moved) {
+                    installedCount++;
+                    dlCardBadges[i].setText("✓ Pronto");
+                    dlCardBadges[i].setBackground(badgeDrawable(0xff2e7d32));
+                    dlCardSubtexts[i].setText(f.name + " (Instalado com sucesso)");
+                    dlCardBars[i].setProgress(100);
+                    dlCardActionBtns[i].setText("✓ Verificado no jogo");
+                    dlCardActionBtns[i].setEnabled(false);
+                    dlCardActionBtns[i].setAlpha(0.5f);
+                } else {
+                    dlCardBadges[i].setText("Transferindo…");
+                    dlCardBadges[i].setBackground(badgeDrawable(0xff00838f));
+                    dlCardSubtexts[i].setText("Copiando para a pasta do jogo (BridgeGames)…");
+                    dlCardBars[i].setProgress(99);
+                    dlCardActionBtns[i].setText("Transferindo…");
+                    dlCardActionBtns[i].setEnabled(false);
+                    dlCardActionBtns[i].setAlpha(0.7f);
+                }
+            } else if (p.isActive()) {
+                anyActive = true;
+                totalBytesDone += p.bytesDone;
+                totalBytesTotal += (p.bytesTotal > 0 ? p.bytesTotal : f.approxSize);
+                dlCardBadges[i].setText("⬇ " + p.percent() + "%");
+                dlCardBadges[i].setBackground(badgeDrawable(0xff00838f));
+                dlCardSubtexts[i].setText(humanSize(p.bytesDone) + " / " + humanSize(p.bytesTotal > 0 ? p.bytesTotal : f.approxSize)
+                        + " • " + p.percent() + "% concluído");
+                dlCardBars[i].setProgress(p.percent());
+                dlCardActionBtns[i].setText("✕ Cancelar");
+                dlCardActionBtns[i].setEnabled(true);
+                dlCardActionBtns[i].setAlpha(1.0f);
+            } else if (p.isFailed()) {
+                dlCardBadges[i].setText("⚠ Falhou");
+                dlCardBadges[i].setBackground(badgeDrawable(0xffc62828));
+                dlCardSubtexts[i].setText("Erro: " + p.formatReason());
+                dlCardBars[i].setProgress(0);
+                dlCardActionBtns[i].setText("↻ Tentar Novamente");
+                dlCardActionBtns[i].setEnabled(true);
+                dlCardActionBtns[i].setAlpha(1.0f);
+            } else {
+                totalBytesTotal += f.approxSize;
+                dlCardBadges[i].setText("Pendente");
+                dlCardBadges[i].setBackground(badgeDrawable(0xff37474f));
+                dlCardSubtexts[i].setText(f.name + " • " + humanSize(f.approxSize));
+                dlCardBars[i].setProgress(0);
+                dlCardActionBtns[i].setText("⬇ Baixar Este Arquivo (" + humanSize(f.approxSize) + ")");
+                dlCardActionBtns[i].setEnabled(true);
+                dlCardActionBtns[i].setAlpha(1.0f);
+            }
+        }
+
+        if (dlSummaryText != null) {
+            if (installedCount >= 3) {
+                dlSummaryText.setText("✓ Todos os 3 arquivos instalados! Toque em «Jogar».");
+                dlSummaryText.setTextColor(Color.rgb(129, 199, 132));
+                if (dlAllBtn != null) {
+                    dlAllBtn.setText("✓ Todos os Arquivos Instalados");
+                    dlAllBtn.setEnabled(false);
+                    dlAllBtn.setAlpha(0.5f);
+                }
+            } else {
+                long remaining = Math.max(0, totalBytesTotal - totalBytesDone);
+                dlSummaryText.setText(installedCount + " de 3 arquivos instalados ("
+                        + humanSize(totalBytesDone) + " / " + humanSize(totalBytesTotal) + (remaining > 0 ? " • " + humanSize(remaining) + " restantes)" : ")"));
+                dlSummaryText.setTextColor(ACCENT);
+                if (dlAllBtn != null) {
+                    dlAllBtn.setText(anyActive ? "⬇ Baixando Arquivos…" : "⬇ Baixar Todos os Faltantes (" + (3 - installedCount) + " restantes)");
+                    dlAllBtn.setEnabled(!anyActive);
+                    dlAllBtn.setAlpha(anyActive ? 0.6f : 1.0f);
+                }
+            }
+        }
     }
 
     @Override public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
