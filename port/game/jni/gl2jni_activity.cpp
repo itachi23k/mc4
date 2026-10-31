@@ -183,23 +183,31 @@ static char g_keyboard_text[256] = "";
 static bool g_keyboard_visible = false;
 static bool g_keyboard_confirmed = false;
 
+static void mc4_load_profile_if_needed(void);
+static void mc4_save_player_username(const char *name);
+static const char *mc4_get_player_username(void);
+
 static void Lib_ShowKeyboard(JNIEnv *env, jclass c, jint type, jstring currentText, jint maxLength) {
     (void)c; (void)type;
+    mc4_load_profile_if_needed();
     const char *cur = currentText ? ((String *)currentText)->str : "";
-    snprintf(g_keyboard_text, sizeof(g_keyboard_text), "%s", cur);
+    if (!cur[0]) {
+        cur = mc4_get_player_username();
+    }
+    snprintf(g_keyboard_text, sizeof(g_keyboard_text), "%s", cur ? cur : "");
     g_keyboard_visible = true;
     g_keyboard_confirmed = false;
 
-    // Salva a requisição na pasta ctl/ para o MainActivity ler e abrir o Gboard
+    // Salva a requisição na pasta ctl/ para o MainActivity ler e abrir o teclado Android
     const char *ctrl_dir = getenv("MC4_CONTROL_DIR");
     char path[PATH_MAX];
     snprintf(path, sizeof(path), "%s/keyboard_request", ctrl_dir ? ctrl_dir : ".");
     FILE *f = fopen(path, "w");
     if (f) {
-        fprintf(f, "%s\n%d\n", cur, maxLength);
+        fprintf(f, "%s\n%d\n", g_keyboard_text, maxLength > 0 ? maxLength : 32);
         fclose(f);
     }
-    trace("keyboard: ShowKeyboard current='%s' max=%d", cur, maxLength);
+    trace("keyboard: ShowKeyboard current='%s' max=%d", g_keyboard_text, maxLength);
 }
 
 static jint Lib_IsKeyboardVisible(JNIEnv *env, jclass c) {
@@ -209,11 +217,9 @@ static jint Lib_IsKeyboardVisible(JNIEnv *env, jclass c) {
 
 static jbyteArray Lib_GetKeyboardText(JNIEnv *env, jclass c) {
     (void)c;
-    // Quando a engine lê o texto, ela considera o teclado fechado.
     g_keyboard_visible = false;
     g_keyboard_confirmed = false;
 
-    // Deleta a requisição
     const char *ctrl_dir = getenv("MC4_CONTROL_DIR");
     char path[PATH_MAX];
     snprintf(path, sizeof(path), "%s/keyboard_request", ctrl_dir ? ctrl_dir : ".");
@@ -228,16 +234,24 @@ static jbyteArray Lib_GetKeyboardText(JNIEnv *env, jclass c) {
     return arr;
 }
 
-static void mc4_save_player_username(const char *name);
+static void Lib_HideKeyboard(JNIEnv *env, jclass c) {
+    (void)env; (void)c;
+    g_keyboard_visible = false;
+    g_keyboard_confirmed = false;
+    trace("keyboard: HideKeyboard");
+}
 
 extern "C" void mc4_update_keyboard_text(const char* text) {
+    g_keyboard_visible = false;
     if (text) {
         snprintf(g_keyboard_text, sizeof(g_keyboard_text), "%s", text);
         g_keyboard_confirmed = true;
         if (text[0] != '\0') {
             mc4_save_player_username(text);
         }
-        trace("keyboard: confirmed text='%s', waiting for engine to consume", text);
+        trace("keyboard: confirmed text='%s'", text);
+    } else {
+        trace("keyboard: cancelled");
     }
 }
 // ====================================================
@@ -375,38 +389,36 @@ static void mc4_load_profile_if_needed(void)
         return;
     g_mc4_profile_loaded = true;
 
-    const char *env_name = getenv("MC4_PLAYER_NAME");
-    if (env_name && env_name[0]) {
-        snprintf(g_mc4_username, sizeof(g_mc4_username), "%s", env_name);
-        return;
+    // Prioriza o arquivo de perfil salvo pelo jogador
+    const char *w_dir = io_writable_dir();
+    if (w_dir) {
+        char path[PATH_MAX];
+        snprintf(path, sizeof(path), "%s/player_profile.txt", w_dir);
+        FILE *f = fopen(path, "r");
+        if (f) {
+            if (fgets(g_mc4_username, sizeof(g_mc4_username), f)) {
+                char *nl = strchr(g_mc4_username, '\n');
+                if (nl) *nl = '\0';
+                char *cr = strchr(g_mc4_username, '\r');
+                if (cr) *cr = '\0';
+            }
+            fclose(f);
+        }
     }
 
-    const char *w_dir = io_writable_dir();
-    if (!w_dir)
-        return;
-    char path[PATH_MAX];
-    snprintf(path, sizeof(path), "%s/player_profile.txt", w_dir);
-    FILE *f = fopen(path, "r");
-    if (f) {
-        if (fgets(g_mc4_username, sizeof(g_mc4_username), f)) {
-            char *nl = strchr(g_mc4_username, '\n');
-            if (nl) *nl = '\0';
-            char *cr = strchr(g_mc4_username, '\r');
-            if (cr) *cr = '\0';
-        }
-        fclose(f);
-    }
     if (!g_mc4_username[0]) {
-        snprintf(g_mc4_username, sizeof(g_mc4_username), "Player");
+        const char *env_name = getenv("MC4_PLAYER_NAME");
+        if (env_name && env_name[0]) {
+            snprintf(g_mc4_username, sizeof(g_mc4_username), "%s", env_name);
+        } else {
+            snprintf(g_mc4_username, sizeof(g_mc4_username), "Player");
+        }
     }
+    trace("profile: loaded player username '%s'", g_mc4_username);
 }
 
 static const char *mc4_get_player_username(void)
 {
-    const char *env_name = getenv("MC4_PLAYER_NAME");
-    if (env_name && env_name[0]) {
-        return env_name;
-    }
     mc4_load_profile_if_needed();
     return g_mc4_username;
 }
@@ -420,24 +432,20 @@ static void mc4_save_player_username(const char *name)
 {
     if (!name || !name[0])
         return;
-    const char *env_name = getenv("MC4_PLAYER_NAME");
-    if (env_name && env_name[0]) {
-        snprintf(g_mc4_username, sizeof(g_mc4_username), "%s", env_name);
-    } else {
-        snprintf(g_mc4_username, sizeof(g_mc4_username), "%s", name);
-    }
+    snprintf(g_mc4_username, sizeof(g_mc4_username), "%s", name);
     trace("profile: saved player username '%s'", g_mc4_username);
 
     const char *w_dir = io_writable_dir();
-    if (!w_dir)
-        return;
-    char path[PATH_MAX];
-    snprintf(path, sizeof(path), "%s/player_profile.txt", w_dir);
-    FILE *f = fopen(path, "w");
-    if (f) {
-        fprintf(f, "%s\n", g_mc4_username);
-        fclose(f);
+    if (w_dir) {
+        char path[PATH_MAX];
+        snprintf(path, sizeof(path), "%s/player_profile.txt", w_dir);
+        FILE *f = fopen(path, "w");
+        if (f) {
+            fprintf(f, "%s\n", g_mc4_username);
+            fclose(f);
+        }
     }
+    setenv("MC4_PLAYER_NAME", g_mc4_username, 1);
 }
 
 static void mc4_save_player_password(const char *pass)
@@ -449,8 +457,6 @@ static void mc4_save_player_password(const char *pass)
 }
 
 #include "game_gen.inc"
-
-
 
 #define CLS GloftMC4
 const ManagedMethod gloftMC4Methods[] = {
@@ -465,6 +471,10 @@ const ManagedMethod gloftMC4Methods[] = {
     M(Game_getCountry,           "getCountry",           "()" STR),
     M(Game_getUserAgent,         "getUserAgent",         "()" STR),
     M(Game_getMasterVolume,      "getMasterVolume",      "()I"),
+    M(Lib_ShowKeyboard,          "ShowKeyboard",         "(I" STR "I)V"),
+    M(Lib_IsKeyboardVisible,     "IsKeyboardVisible",    "()I"),
+    M(Lib_GetKeyboardText,       "GetKeyboardText",      "()[B"),
+    M(Lib_HideKeyboard,          "HideKeyboard",         "()V"),
     GAME_GEN_METHODS
     {NULL},
 };
