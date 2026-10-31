@@ -18,6 +18,7 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.Switch;
@@ -31,6 +32,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -48,6 +50,14 @@ public final class SettingsActivity extends Activity {
     private float dp;
     private TextView folderInfo, versionInfo;
     private boolean hadAccess, asked;
+
+    // ---- barra de progresso do download (Google Drive) ----
+    private LinearLayout dlBox;
+    private TextView[] dlLabels;
+    private ProgressBar[] dlBars;
+    private TextView[] dlPercents;
+    private boolean dlPolling;
+    private Runnable dlPoll;
 
     /** The existing settings file (main folder first, then the other), or where it would be written. */
     static File file(Context c) {
@@ -127,7 +137,100 @@ public final class SettingsActivity extends Activity {
         versionInfo.setVisibility(View.GONE);
         col.addView(versionInfo);
 
-        // ---- PRESETS (atalhos que usam só knobs que o bridge realmente implementa) ----
+        // ---- INSTALAÇÃO (download do Google Drive) ----
+        col.addView(section("Instalação"));
+        col.addView(text(
+                "Baixa o APK e os OBBs da pasta pública do Google Drive para a pasta do jogo.",
+                12, DIM, false));
+
+        // Container das barras de progresso. Fica GONE até começar um download.
+        dlBox = new LinearLayout(this);
+        dlBox.setOrientation(LinearLayout.VERTICAL);
+        dlBox.setPadding(0, px(12), 0, 0);
+        dlBox.setVisibility(View.GONE);
+
+        dlLabels = new TextView[3];
+        dlBars = new ProgressBar[3];
+        dlPercents = new TextView[3];
+        for (int i = 0; i < 3; i++) {
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.VERTICAL);
+            row.setPadding(0, px(8), 0, px(4));
+
+            dlLabels[i] = text("", 12, FG, false);
+            dlBars[i] = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+            dlBars[i].setMax(100);
+            dlBars[i].setProgress(0);
+            dlPercents[i] = text("0%", 11, DIM, false);
+
+            row.addView(dlLabels[i]);
+            row.addView(dlBars[i]);
+            row.addView(dlPercents[i]);
+            dlBox.addView(row);
+        }
+        col.addView(dlBox);
+
+        Button downloadBtn = button("Baixar do Google Drive");
+        downloadBtn.setOnClickListener(v -> {
+            if (DriveDownloader.allPresent(this)) {
+                Toast.makeText(this, "Os arquivos já estão na pasta do jogo.", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (!Storage.hasAccess(this)) {
+                Toast.makeText(this, "Conceda acesso a todos os arquivos primeiro.", Toast.LENGTH_LONG).show();
+                return;
+            }
+            new AlertDialog.Builder(this)
+                    .setTitle("Baixar dados do jogo")
+                    .setMessage("Vai baixar o APK e os OBBs (~1.5 GB) de uma pasta pública.\n\n"
+                            + "Recomendado estar no Wi-Fi. O download continua mesmo se você sair do app.")
+                    .setPositiveButton("Baixar", (d, w) -> {
+                        DriveDownloader.downloadAll(this);
+                        startProgressPolling();
+                    })
+                    .setNegativeButton("Cancelar", null)
+                    .show();
+        });
+        col.addView(downloadBtn, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        // Configurar o poll de progresso (criado uma vez; se re-agenda sozinho).
+        dlPoll = () -> {
+            if (!dlPolling) return;
+            DriveDownloader.Progress[] ps = DriveDownloader.snapshot(this);
+            boolean anyActive = false;
+            for (int i = 0; i < ps.length && i < dlLabels.length; i++) {
+                DriveDownloader.Progress p = ps[i];
+                dlLabels[i].setText(p.name);
+                dlBars[i].setProgress(p.percent());
+                if (p.isFailed()) {
+                    dlPercents[i].setText("Falhou. Verifique a conexão.");
+                } else if (p.isDone()) {
+                    dlPercents[i].setText("Concluído (" + humanSize(p.bytesTotal) + ")");
+                } else if (p.isActive()) {
+                    dlPercents[i].setText(p.percent() + "%  ("
+                            + humanSize(p.bytesDone) + " / " + humanSize(p.bytesTotal) + ")");
+                    anyActive = true;
+                } else {
+                    dlPercents[i].setText("Aguardando…");
+                }
+            }
+            if (!anyActive) {
+                // Nada mais ativo: para o polling e decide se esconde ou não.
+                dlPolling = false;
+                dlBox.postDelayed(() -> {
+                    if (DriveDownloader.allPresent(this)) {
+                        dlBox.setVisibility(View.GONE);
+                        Toast.makeText(this, "Todos os arquivos baixados! Inicie o jogo.",
+                                Toast.LENGTH_LONG).show();
+                    }
+                }, 500);
+                return;
+            }
+            dlBox.postDelayed(dlPoll, 1000);
+        };
+
+        // ---- PRESETS ----
         col.addView(section("Presets de Qualidade"));
         col.addView(toggle("Nítido", "MC4_PRESET_SHARP", false,
                 "Renderiza em 1440p interno e reduz para a tela — ganho real de nitidez em qualquer painel.\n"
@@ -167,21 +270,7 @@ public final class SettingsActivity extends Activity {
                 "Taxa de atualização da tela e limite máximo de FPS."));
         col.addView(toggle("Contador de FPS", "FPS_COUNTER", true, "Exibe um pequeno contador verde em tempo real no topo da tela."));
 
-                // ---- PÓS-PROCESSAMENTO (roda na GPU real, fora do qemu — ganho visual sem custo de emulação) ----
-        col.addView(section("Pós-processamento"));
-        col.addView(toggle("Nitidez Adaptativa (CAS)", "MC4_POST_PROCESS", false,
-                "Aplica nitidez adaptativa na imagem final usando a GPU real do celular.\n"
-              + "Reduz o borrão de upscale sem custo no qemu (~0.5 ms/quadro).\n"
-              + "É especialmente útil quando RENDER_HEIGHT é menor que o painel.\n"
-              + "Não altera sombras/LOD/culling — só a nitidez da imagem final."));
-
-        col.addView(choice("Intensidade do CAS", "MC4_POST_STRENGTH",
-                new int[] { 5, 8, 10, 12, 15 },
-                new String[] { "0.5×", "0.8×", "1.0×", "1.2×", "1.5×" }, 10, "",
-                "Quanto maior, mais nítido — e mais artefatos em bordas fortes.\n"
-              + "1.0× é o ponto de equilíbrio."));
-
-        // ---- APARÊNCIA AVANÇADA (spoof de GPU — único knob real de qualidade da engine) ----
+        // ---- APARÊNCIA AVANÇADA ----
         col.addView(section("Aparência Avançada"));
         col.addView(textInput("Nome da GPU (spoof)", "MC4_GL_RENDERER", "",
                 "A engine escolhe o perfil gráfico pelo nome da GPU. Se seu aparelho for reconhecido\n"
@@ -190,35 +279,6 @@ public final class SettingsActivity extends Activity {
               + "Equivale a colocar gpu_name.txt na pasta do jogo (o valor daqui ganha do arquivo)."));
 
         // ---- CRÉDITOS ----
-                col.addView(section("Instalação"));
-        col.addView(toggle(
-                "Baixar dados do jogo",
-                // Não é uma chave real de settings; é um "botão-toggle" que dispara uma ação.
-                // Implementado abaixo como um botão simples em vez de Switch.
-                "__noop__", false,
-                "Baixa o APK e os OBBs de uma pasta pública do Google Drive " +
-                "direto para a pasta do jogo. Precisa de internet."));
-
-        Button downloadBtn = button("Baixar do Google Drive");
-        downloadBtn.setOnClickListener(v -> {
-            if (DriveDownloader.allPresent(this)) {
-                Toast.makeText(this, "Os arquivos já estão na pasta do jogo.", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            new AlertDialog.Builder(this)
-                    .setTitle("Baixar dados do jogo")
-                    .setMessage("Vai baixar o APK e os OBBs (~1.5 GB) de uma pasta pública.\n\n" +
-                                "Recomendado estar no Wi-Fi. O download continua mesmo se você sair do app.")
-                    .setPositiveButton("Baixar", (d, w) -> DriveDownloader.downloadAll(this))
-                    .setNegativeButton("Cancelar", null)
-                    .show();
-        });
-        col.addView(downloadBtn, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        
-
-
-        
         col.addView(section("Créditos e Moedas"));
         col.addView(toggle("Créditos Infinitos", "MC4_MONEY_INFINITE", false,
                 "Exibe 9.999.999 créditos e compras não debitam. O saldo real é preservado ao desativar."));
@@ -290,6 +350,16 @@ public final class SettingsActivity extends Activity {
         if (now && !hadAccess) moveFiles();
         hadAccess = now;
         showFolder();
+        // Se algum download já está rolando (iniciado numa sessão anterior), re-liga o polling.
+        if (DriveDownloader.anyActive(this)) startProgressPolling();
+    }
+
+    private void startProgressPolling() {
+        if (dlPoll == null) return;
+        dlBox.setVisibility(View.VISIBLE);
+        if (dlPolling) return;
+        dlPolling = true;
+        dlBox.post(dlPoll);
     }
 
     @Override public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
@@ -342,6 +412,16 @@ public final class SettingsActivity extends Activity {
     private void restartGame() {
         startActivity(new Intent(this, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
         finish();
+    }
+
+    // ------------------------------------------------------------ helpers
+
+    private static String humanSize(long bytes) {
+        if (bytes <= 0) return "—";
+        if (bytes < 1024) return bytes + " B";
+        if (bytes < 1024 * 1024) return String.format(Locale.US, "%.1f KB", bytes / 1024.0);
+        if (bytes < 1024L * 1024 * 1024) return String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024));
+        return String.format(Locale.US, "%.2f GB", bytes / (1024.0 * 1024 * 1024));
     }
 
     // ------------------------------------------------------------ widgets
