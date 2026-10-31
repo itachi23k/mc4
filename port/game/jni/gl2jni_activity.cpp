@@ -228,12 +228,15 @@ static jbyteArray Lib_GetKeyboardText(JNIEnv *env, jclass c) {
     return arr;
 }
 
+static void mc4_save_player_username(const char *name);
+
 extern "C" void mc4_update_keyboard_text(const char* text) {
     if (text) {
         snprintf(g_keyboard_text, sizeof(g_keyboard_text), "%s", text);
         g_keyboard_confirmed = true;
-        // NÃO mudamos g_keyboard_visible aqui.
-        // A engine precisa ver que o teclado ainda está aberto para ler o texto.
+        if (text[0] != '\0') {
+            mc4_save_player_username(text);
+        }
         trace("keyboard: confirmed text='%s', waiting for engine to consume", text);
     }
 }
@@ -397,6 +400,10 @@ static void mc4_load_profile_if_needed(void)
 
 static const char *mc4_get_player_username(void)
 {
+    const char *env_name = getenv("MC4_PLAYER_NAME");
+    if (env_name && env_name[0]) {
+        return env_name;
+    }
     mc4_load_profile_if_needed();
     return g_mc4_username;
 }
@@ -410,7 +417,12 @@ static void mc4_save_player_username(const char *name)
 {
     if (!name || !name[0])
         return;
-    snprintf(g_mc4_username, sizeof(g_mc4_username), "%s", name);
+    const char *env_name = getenv("MC4_PLAYER_NAME");
+    if (env_name && env_name[0]) {
+        snprintf(g_mc4_username, sizeof(g_mc4_username), "%s", env_name);
+    } else {
+        snprintf(g_mc4_username, sizeof(g_mc4_username), "%s", name);
+    }
     trace("profile: saved player username '%s'", g_mc4_username);
 
     char path[PATH_MAX];
