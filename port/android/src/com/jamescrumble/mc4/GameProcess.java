@@ -110,6 +110,7 @@ final class GameProcess {
             case "MC4_PRESET_EXTREME":
             case "MC4_POST_PROCESS":
             case "MC4_POST_STRENGTH":
+            case "MC4_COLOR_PROFILE":
                 return true;
             default:
                 return false;
@@ -417,10 +418,21 @@ final class GameProcess {
         // Uma única leitura de settings, com os presets já aplicados, para todos os pontos abaixo.
         // Presets nunca sobrescrevem uma chave que o usuário já tenha salvo.
         Map<String, String> settings = withPresets(SettingsActivity.load(ctx));
-        float ppStrength = 1.0f;
-        try { ppStrength = Integer.parseInt(settings.getOrDefault("MC4_POST_STRENGTH", "10")) / 10f; }
-        catch (NumberFormatException ignored) { }
-        gl.setPostProcess("1".equals(settings.get("MC4_POST_PROCESS")), ppStrength);
+        // Pós-processamento e Color Grading (Restauração dos tons e curvas de cor Gameloft 2012)
+        String colorProfile = settings.getOrDefault("MC4_COLOR_PROFILE", "1");
+        boolean ppEnabled = !"0".equals(colorProfile);
+        float sat = 1.25f, con = 1.15f, gam = 0.90f, shp = 0.35f;
+        if ("2".equals(colorProfile)) {
+            // Cinematográfico (Contraste profundo)
+            sat = 1.12f; con = 1.25f; gam = 0.88f; shp = 0.30f;
+        } else if ("3".equals(colorProfile)) {
+            // Suave / Balanceado
+            sat = 1.10f; con = 1.08f; gam = 0.95f; shp = 0.20f;
+        } else if ("1".equals(colorProfile)) {
+            // Vívido (Gameloft 2012 Original: curvas S, realce de saturação e gamma)
+            sat = 1.25f; con = 1.15f; gam = 0.90f; shp = 0.35f;
+        }
+        gl.setColorGrading(ppEnabled, sat, con, gam, shp);
 
         Map<String, String> env = b.environment();
         env.put("HOME", new File(root, "home").getPath());
@@ -430,8 +442,13 @@ final class GameProcess {
         env.put("MC4_AUDIO_FIFO", fifo.getPath());
         env.put("MC4_CONTROL_DIR", control.getPath());
         seedProfile(new File(root, "game"), saveFolder);
-        env.put("MC4_SAVEDIR", new File(new File(root, "game"), saveFolder).getPath());
+        File saveDir = new File(new File(root, "game"), saveFolder);
+        env.put("MC4_SAVEDIR", saveDir.getPath());
         appendLog("[wrapper] profile folder " + saveFolder);
+        String customNick = settings.get("MC4_PLAYER_NAME");
+        if (customNick != null && !customNick.trim().isEmpty()) {
+            writeText(new File(saveDir, "player_profile.txt"), customNick.trim() + "\n");
+        }
         env.put("MC4_GL_BRIDGE", "1");
         env.put("MC4_SCALE", "stretch");
         env.put("MC4_GL_CMD", glCmd.getPath());
