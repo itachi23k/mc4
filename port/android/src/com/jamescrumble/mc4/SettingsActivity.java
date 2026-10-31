@@ -170,31 +170,42 @@ public final class SettingsActivity extends Activity {
         }
         col.addView(dlBox);
 
-        Button downloadBtn = button("Baixar do Google Drive");
+                Button downloadBtn = button("Baixar do Google Drive");
         downloadBtn.setOnClickListener(v -> {
-            if (DriveDownloader.allPresent(this)) {
-                Toast.makeText(this, "Os arquivos já estão na pasta do jogo.", Toast.LENGTH_SHORT).show();
-                return;
+            try {
+                if (DriveDownloader.allPresent(this)) {
+                    Toast.makeText(this, "Os arquivos já estão na pasta do jogo.", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                if (!Storage.hasAccess(this)) {
+                    Toast.makeText(this, "Conceda acesso a todos os arquivos primeiro.", Toast.LENGTH_LONG).show();
+                    return;
+                }
+                new AlertDialog.Builder(this)
+                        .setTitle("Baixar dados do jogo")
+                        .setMessage("Vai baixar o APK e os OBBs (~1.5 GB) de uma pasta pública.\n\n"
+                                + "Recomendado estar no Wi-Fi. O download continua mesmo se você sair do app.")
+                        .setPositiveButton("Baixar", (d, w) -> {
+                            try {
+                                DriveDownloader.downloadAll(this);
+                                startProgressPolling();
+                            } catch (Exception e) {
+                                Log.e(TAG, "download failed", e);
+                                Toast.makeText(this, "Falha ao iniciar download: " + e.getMessage(),
+                                        Toast.LENGTH_LONG).show();
+                            }
+                        })
+                        .setNegativeButton("Cancelar", null)
+                        .show();
+            } catch (Exception e) {
+                Log.e(TAG, "download button failed", e);
             }
-            if (!Storage.hasAccess(this)) {
-                Toast.makeText(this, "Conceda acesso a todos os arquivos primeiro.", Toast.LENGTH_LONG).show();
-                return;
-            }
-            new AlertDialog.Builder(this)
-                    .setTitle("Baixar dados do jogo")
-                    .setMessage("Vai baixar o APK e os OBBs (~1.5 GB) de uma pasta pública.\n\n"
-                            + "Recomendado estar no Wi-Fi. O download continua mesmo se você sair do app.")
-                    .setPositiveButton("Baixar", (d, w) -> {
-                        DriveDownloader.downloadAll(this);
-                        startProgressPolling();
-                    })
-                    .setNegativeButton("Cancelar", null)
-                    .show();
         });
         col.addView(downloadBtn, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         // Configurar o poll de progresso (criado uma vez; se re-agenda sozinho).
+                // Configurar o poll de progresso (criado uma vez; se re-agenda sozinho).
         dlPoll = () -> {
             if (!dlPolling) return;
             DriveDownloader.Progress[] ps = DriveDownloader.snapshot(this);
@@ -206,7 +217,14 @@ public final class SettingsActivity extends Activity {
                 if (p.isFailed()) {
                     dlPercents[i].setText("Falhou. Verifique a conexão.");
                 } else if (p.isDone()) {
-                    dlPercents[i].setText("Concluído (" + humanSize(p.bytesTotal) + ")");
+                    // Pode ser: já está na pasta final, ou está em /sdcard/Download
+                    // esperando ser movido. moveIfFinished() tenta copiar e devolve true.
+                    if (DriveDownloader.moveIfFinished(this, p.name)) {
+                        dlPercents[i].setText("Concluído (" + humanSize(p.bytesTotal) + ")");
+                    } else {
+                        dlPercents[i].setText("Baixado — movendo…");
+                        anyActive = true;
+                    }
                 } else if (p.isActive()) {
                     dlPercents[i].setText(p.percent() + "%  ("
                             + humanSize(p.bytesDone) + " / " + humanSize(p.bytesTotal) + ")");
@@ -216,7 +234,6 @@ public final class SettingsActivity extends Activity {
                 }
             }
             if (!anyActive) {
-                // Nada mais ativo: para o polling e decide se esconde ou não.
                 dlPolling = false;
                 dlBox.postDelayed(() -> {
                     if (DriveDownloader.allPresent(this)) {
