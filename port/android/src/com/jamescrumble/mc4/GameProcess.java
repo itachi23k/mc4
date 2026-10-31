@@ -443,11 +443,16 @@ final class GameProcess {
         env.put("MC4_CONTROL_DIR", control.getPath());
         seedProfile(new File(root, "game"), saveFolder);
         File saveDir = new File(new File(root, "game"), saveFolder);
+        saveDir.mkdirs();
         env.put("MC4_SAVEDIR", saveDir.getPath());
         appendLog("[wrapper] profile folder " + saveFolder);
         String customNick = settings.get("MC4_PLAYER_NAME");
         if (customNick != null && !customNick.trim().isEmpty()) {
-            writeText(new File(saveDir, "player_profile.txt"), customNick.trim() + "\n");
+            try {
+                writeText(new File(saveDir, "player_profile.txt"), customNick.trim() + "\n");
+            } catch (Exception e) {
+                appendLog("[wrapper] aviso: falha ao salvar player_profile.txt: " + e.getMessage());
+            }
         }
         env.put("MC4_GL_BRIDGE", "1");
         env.put("MC4_SCALE", "stretch");
