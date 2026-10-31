@@ -468,7 +468,6 @@ bool android_input_inject_key(int code, bool down)
 extern "C" void mc4_update_keyboard_text(const char* text);
 
 bool android_input_inject_text(const char *text) {
-    if (g_input_ticks < 150) return false;
     mc4_update_keyboard_text(text);
     return true;
 }
