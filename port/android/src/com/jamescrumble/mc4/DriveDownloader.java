@@ -136,3 +136,83 @@ public final class DriveDownloader {
         return true;
     }
 }
+
+    /** Estado de um download específico, pronto para a UI. */
+    public static final class Progress {
+        public final String name;
+        public final int status;          // DownloadManager.STATUS_*
+        public final long bytesDone;
+        public final long bytesTotal;
+        public Progress(String name, int status, long done, long total) {
+            this.name = name; this.status = status;
+            this.bytesDone = done; this.bytesTotal = total;
+        }
+        /** 0..100, ou 0 quando o total é desconhecido. */
+        public int percent() {
+            if (bytesTotal <= 0) return 0;
+            return (int) Math.min(100, bytesDone * 100 / bytesTotal);
+        }
+        public boolean isDone() {
+            return status == DownloadManager.STATUS_SUCCESSFUL;
+        }
+        public boolean isActive() {
+            return status == DownloadManager.STATUS_RUNNING
+                || status == DownloadManager.STATUS_PENDING
+                || status == DownloadManager.STATUS_PAUSED;
+        }
+        public boolean isFailed() {
+            return status == DownloadManager.STATUS_FAILED;
+        }
+    }
+
+    /**
+     * Consulta o DownloadManager para o estado atual dos 3 arquivos.
+     * Retorna uma entrada por arquivo, na mesma ordem de FILES.
+     * Para arquivos já baixados antes (não enfileirados nesta sessão),
+     * retorna STATUS_SUCCESSFUL com bytesDone == bytesTotal == tamanho local.
+     */
+    public static Progress[] snapshot(Context c) {
+        Progress[] out = new Progress[FILES.length];
+        DownloadManager dm = (DownloadManager) c.getSystemService(Context.DOWNLOAD_SERVICE);
+        File dir = targetDir(c);
+
+        for (int i = 0; i < FILES.length; i++) {
+            DriveFile f = FILES[i];
+            File local = new File(dir, f.name);
+
+            // Se o arquivo já está completo localmente, nem consulta o DM.
+            if (local.exists() && local.length() >= MIN_VALID_BYTES) {
+                out[i] = new Progress(f.name, DownloadManager.STATUS_SUCCESSFUL,
+                        local.length(), local.length());
+                continue;
+            }
+
+            // Caso contrário, procura no DM um download ativo para essa URL.
+            // O DM não nos dá o "name" do arquivo diretamente, então casamos por URI.
+            DownloadManager.Query q = new DownloadManager.Query();
+            // Não tem filtro por URI nativo; pegamos todos e casamos manualmente.
+            // Como são só 3-5 downloads no total, é rápido.
+            try (android.database.Cursor cur = dm.query(q)) {
+                if (cur == null) { out[i] = new Progress(f.name, 0, 0, 0); continue; }
+                boolean found = false;
+                while (cur.moveToNext()) {
+                    String uri = cur.getString(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_URI));
+                    if (uri == null || !uri.contains(f.id)) continue;
+                    int status = cur.getInt(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+                    long done  = cur.getLong(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+                    long total = cur.getLong(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+                    out[i] = new Progress(f.name, status, done, total);
+                    found = true;
+                    break;
+                }
+                if (!found) out[i] = new Progress(f.name, 0, 0, 0);
+            }
+        }
+        return out;
+    }
+
+    /** True quando algum download está ativo (para saber quando parar o polling). */
+    public static boolean anyActive(Context c) {
+        for (Progress p : snapshot(c)) if (p.isActive()) return true;
+        return false;
+    }
