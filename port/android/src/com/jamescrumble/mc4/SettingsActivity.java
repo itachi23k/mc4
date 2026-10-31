@@ -1,10 +1,16 @@
 package com.jamescrumble.mc4;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.DownloadManager;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.os.Build;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.InputFilter;
@@ -43,6 +49,7 @@ import java.util.Map;
  */
 public final class SettingsActivity extends Activity {
     private static final String TAG = "MC4_Settings";
+    private static final int REQ_NOTIF = 101;
     private static final int BG = Color.rgb(18, 22, 26), FG = Color.rgb(230, 235, 238), DIM = Color.rgb(140, 150, 156),
             ACCENT = Color.rgb(128, 203, 196);
 
@@ -58,6 +65,7 @@ public final class SettingsActivity extends Activity {
     private TextView[] dlPercents;
     private boolean dlPolling;
     private Runnable dlPoll;
+    private BroadcastReceiver dlReceiver;
 
     /** The existing settings file (main folder first, then the other), or where it would be written. */
     static File file(Context c) {
@@ -178,13 +186,26 @@ public final class SettingsActivity extends Activity {
                     return;
                 }
                 if (!Storage.hasAccess(this)) {
-                    Toast.makeText(this, "Conceda acesso a todos os arquivos primeiro.", Toast.LENGTH_LONG).show();
+                    new AlertDialog.Builder(this)
+                            .setTitle("Acesso a Todos os Arquivos")
+                            .setMessage("Para armazenar os dados do jogo (~1.5 GB) em BridgeGames, conceda a permissão de acesso aos arquivos.")
+                            .setPositiveButton("Conceder Acesso", (d, w) -> Storage.requestAccess(this, 2))
+                            .setNegativeButton("Cancelar", null)
+                            .show();
                     return;
                 }
+
+                // Android 13+ (API 33, 34, 35, 36): pedir permissão de notificações para exibir progresso
+                if (Build.VERSION.SDK_INT >= 33) {
+                    if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                        requestPermissions(new String[]{ Manifest.permission.POST_NOTIFICATIONS }, REQ_NOTIF);
+                    }
+                }
+
                 new AlertDialog.Builder(this)
                         .setTitle("Baixar dados do jogo")
-                        .setMessage("Vai baixar o APK e os OBBs (~1.5 GB) de uma pasta pública.\n\n"
-                                + "Recomendado estar no Wi-Fi. O download continua mesmo se você sair do app.")
+                        .setMessage("Vai baixar o APK e os OBBs (~1.5 GB) do Google Drive.\n\n"
+                                + "Recomendado estar no Wi-Fi. O download continua em segundo plano mesmo se você sair do aplicativo.")
                         .setPositiveButton("Baixar", (d, w) -> {
                             try {
                                 DriveDownloader.downloadAll(this);
@@ -204,8 +225,7 @@ public final class SettingsActivity extends Activity {
         col.addView(downloadBtn, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        // Configurar o poll de progresso (criado uma vez; se re-agenda sozinho).
-                // Configurar o poll de progresso (criado uma vez; se re-agenda sozinho).
+        // Configurar o poll de progresso (compatível com Android 15 e 16)
         dlPoll = () -> {
             if (!dlPolling) return;
             DriveDownloader.Progress[] ps = DriveDownloader.snapshot(this);
@@ -215,19 +235,22 @@ public final class SettingsActivity extends Activity {
                 dlLabels[i].setText(p.name);
                 dlBars[i].setProgress(p.percent());
                 if (p.isFailed()) {
-                    dlPercents[i].setText("Falhou. Verifique a conexão.");
+                    dlPercents[i].setText("Falhou: " + p.formatReason());
                 } else if (p.isDone()) {
-                    // Pode ser: já está na pasta final, ou está em /sdcard/Download
-                    // esperando ser movido. moveIfFinished() tenta copiar e devolve true.
-                    if (DriveDownloader.moveIfFinished(this, p.name)) {
+                    // moveIfFinished tenta copiar via ParcelFileDescriptor, ContentResolver ou Staged
+                    if (DriveDownloader.moveIfFinished(this, p)) {
                         dlPercents[i].setText("Concluído (" + humanSize(p.bytesTotal) + ")");
                     } else {
-                        dlPercents[i].setText("Baixado — movendo…");
+                        dlPercents[i].setText("Baixado — transferindo para o jogo…");
                         anyActive = true;
                     }
                 } else if (p.isActive()) {
-                    dlPercents[i].setText(p.percent() + "%  ("
-                            + humanSize(p.bytesDone) + " / " + humanSize(p.bytesTotal) + ")");
+                    if (p.bytesTotal > 0) {
+                        dlPercents[i].setText(p.percent() + "%  ("
+                                + humanSize(p.bytesDone) + " / " + humanSize(p.bytesTotal) + ")");
+                    } else {
+                        dlPercents[i].setText("Baixando… (" + humanSize(p.bytesDone) + ")");
+                    }
                     anyActive = true;
                 } else {
                     dlPercents[i].setText("Aguardando…");
@@ -235,16 +258,18 @@ public final class SettingsActivity extends Activity {
             }
             if (!anyActive) {
                 dlPolling = false;
-                dlBox.postDelayed(() -> {
-                    if (DriveDownloader.allPresent(this)) {
-                        dlBox.setVisibility(View.GONE);
-                        Toast.makeText(this, "Todos os arquivos baixados! Inicie o jogo.",
-                                Toast.LENGTH_LONG).show();
-                    }
-                }, 500);
+                if (dlBox != null) {
+                    dlBox.postDelayed(() -> {
+                        if (DriveDownloader.allPresent(this)) {
+                            dlBox.setVisibility(View.GONE);
+                            Toast.makeText(this, "Todos os arquivos baixados! Inicie o jogo.",
+                                    Toast.LENGTH_LONG).show();
+                        }
+                    }, 800);
+                }
                 return;
             }
-            dlBox.postDelayed(dlPoll, 1000);
+            if (dlBox != null) dlBox.postDelayed(dlPoll, 1000);
         };
 
         // ---- PRESETS ----
@@ -289,6 +314,13 @@ public final class SettingsActivity extends Activity {
 
         // ---- APARÊNCIA AVANÇADA ----
         col.addView(section("Aparência Avançada"));
+        col.addView(choice("Cores e Curvas de Tom (Color Grading)", "MC4_COLOR_PROFILE",
+                new int[] { 1, 2, 3, 0 },
+                new String[] { "Vívido (Recomendado)", "Cinematográfico", "Suave", "Desligado" }, 1, "",
+                "Restaura a paleta vibrante e o contraste original do jogo de 2012 com correção de gama e curvas S.\n"
+              + "Vívido: Cores ricas e iluminação intensa da versão original.\n"
+              + "Cinematográfico: Contraste dramático e sombras profundas.\n"
+              + "Suave: Tons sutis e menor agressividade."));
         col.addView(textInput("Nome da GPU (spoof)", "MC4_GL_RENDERER", "",
                 "A engine escolhe o perfil gráfico pelo nome da GPU. Se seu aparelho for reconhecido\n"
               + "como uma GPU antiga, digitar o nome de uma top (ex.: Adreno (TM) 740) pode liberar\n"
@@ -359,6 +391,8 @@ public final class SettingsActivity extends Activity {
         showFolder();
         if (!hadAccess) askAccess();
         else moveFiles();
+
+        registerDownloadReceiver();
     }
 
     @Override protected void onResume() {
@@ -367,8 +401,53 @@ public final class SettingsActivity extends Activity {
         if (now && !hadAccess) moveFiles();
         hadAccess = now;
         showFolder();
-        // Se algum download já está rolando (iniciado numa sessão anterior), re-liga o polling.
-        if (DriveDownloader.anyActive(this)) startProgressPolling();
+
+        // Se algum download está ativo, re-ativa o polling na tela.
+        if (DriveDownloader.anyActive(this)) {
+            startProgressPolling();
+        } else if (!DriveDownloader.allPresent(this)) {
+            // Verificar se algum download terminou em segundo plano enquanto o app estava minimizado
+            DriveDownloader.Progress[] ps = DriveDownloader.snapshot(this);
+            for (DriveDownloader.Progress p : ps) {
+                if (p.isDone()) DriveDownloader.moveIfFinished(this, p);
+            }
+        }
+    }
+
+    @Override protected void onDestroy() {
+        super.onDestroy();
+        unregisterDownloadReceiver();
+        dlPolling = false;
+        if (dlBox != null && dlPoll != null) {
+            dlBox.removeCallbacks(dlPoll);
+        }
+    }
+
+    private void registerDownloadReceiver() {
+        if (dlReceiver != null) return;
+        dlReceiver = new BroadcastReceiver() {
+            @Override public void onReceive(Context context, Intent intent) {
+                if (DownloadManager.ACTION_DOWNLOAD_COMPLETE.equals(intent.getAction())) {
+                    runOnUiThread(() -> startProgressPolling());
+                }
+            }
+        };
+        IntentFilter filter = new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE);
+        // No Android 14+ (API 34, 35, 36), broadcasts do sistema precisam de RECEIVER_EXPORTED
+        if (Build.VERSION.SDK_INT >= 33) {
+            registerReceiver(dlReceiver, filter, Context.RECEIVER_EXPORTED);
+        } else {
+            registerReceiver(dlReceiver, filter);
+        }
+    }
+
+    private void unregisterDownloadReceiver() {
+        if (dlReceiver != null) {
+            try {
+                unregisterReceiver(dlReceiver);
+            } catch (Exception ignored) {}
+            dlReceiver = null;
+        }
     }
 
     private void startProgressPolling() {
