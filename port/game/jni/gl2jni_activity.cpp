@@ -381,8 +381,11 @@ static void mc4_load_profile_if_needed(void)
         return;
     }
 
+    const char *w_dir = io_writable_dir();
+    if (!w_dir)
+        return;
     char path[PATH_MAX];
-    snprintf(path, sizeof(path), "%s/player_profile.txt", io_writable_dir());
+    snprintf(path, sizeof(path), "%s/player_profile.txt", w_dir);
     FILE *f = fopen(path, "r");
     if (f) {
         if (fgets(g_mc4_username, sizeof(g_mc4_username), f)) {
@@ -425,8 +428,11 @@ static void mc4_save_player_username(const char *name)
     }
     trace("profile: saved player username '%s'", g_mc4_username);
 
+    const char *w_dir = io_writable_dir();
+    if (!w_dir)
+        return;
     char path[PATH_MAX];
-    snprintf(path, sizeof(path), "%s/player_profile.txt", io_writable_dir());
+    snprintf(path, sizeof(path), "%s/player_profile.txt", w_dir);
     FILE *f = fopen(path, "w");
     if (f) {
         fprintf(f, "%s\n", g_mc4_username);
