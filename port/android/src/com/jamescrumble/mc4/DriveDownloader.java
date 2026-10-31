@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.DownloadManager;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
@@ -23,72 +24,107 @@ import java.io.OutputStream;
  *
  * Compatível com Android 8 até Android 15 (Vanilla Ice Cream / API 35) e Android 16 (Baklava / API 36).
  *
- * No Android 10+, o DownloadManager não permite destinos arbitrários fora da sandbox sem erros.
- * Além disso, nos Androids 14, 15 e 16 com Scoped Storage estrito:
- * 1. O Google Drive exige confirmação de download (&confirm=t) para arquivos grandes e binários
- *    (evitando página HTML de aviso de vírus).
- * 2. O DownloadManager baixa na pasta pública DIRECTORY_DOWNLOADS e os dados concluídos
- *    são transferidos usando ParcelFileDescriptor (dm.openDownloadedFile) ou ContentResolver,
- *    garantindo que mesmo se o arquivo for renomeado pelo sistema ou o caminho direto for
- *    restrito por scoped storage, o arquivo é lido e copiado com sucesso para BridgeGames/<pkg>/.
- * 3. Após a transferência bem-sucedida, a entrada no DownloadManager e o arquivo temporário são limpos.
+ * Suporta downloads individuais, cancelamento por arquivo, persistência de ID no SharedPreferences
+ * e consulta direta por setFilterById, garantindo rastreamento 100% confiável no app sem depender da barra de status.
  */
 public final class DriveDownloader {
     private static final String TAG = "DriveDownloader";
+    private static final String PREF_NAME = "mc4_downloads";
 
-    /** Um arquivo para baixar. O nome local precisa bater com o que o jogo espera. */
-    private static final class DriveFile {
-        final String name;   // nome no disco (não pode ser renomeado)
-        final String id;     // fileId do Drive (o trecho entre /d/ e /view)
-        DriveFile(String name, String id) { this.name = name; this.id = id; }
+    /** Um arquivo para baixar com metadados detalhados para a UI. */
+    public static final class DriveFile {
+        public final String name;        // nome no disco (não pode ser renomeado)
+        public final String id;          // fileId do Drive (o trecho entre /d/ e /view)
+        public final String title;       // título legível para o usuário
+        public final String desc;        // descrição do conteúdo
+        public final long approxSize;    // tamanho aproximado em bytes
+
+        public DriveFile(String name, String id, String title, String desc, long approxSize) {
+            this.name = name;
+            this.id = id;
+            this.title = title;
+            this.desc = desc;
+            this.approxSize = approxSize;
+        }
     }
 
-    private static final DriveFile[] FILES = {
+    public static final DriveFile[] FILES = {
         new DriveFile("MC4-1.2.3e-Ultra-(ARM)-A-M.apk",
-                "1VeSVTSmx-Zt5r_PJEo6-3JAurpIvnq_h"),
+                "1VeSVTSmx-Zt5r_PJEo6-3JAurpIvnq_h",
+                "APK do Jogo (v1.2.3e Ultra)",
+                "Binários ARM nativos e launcher (~43 MB)",
+                45_000_000L),
         new DriveFile("main.1100.com.gameloft.android.ANMP.GloftM4HM.obb",
-                "183Nr5sXjztDQMGiF1v1XzR60otwFwtdq"),
+                "183Nr5sXjztDQMGiF1v1XzR60otwFwtdq",
+                "Cache Principal (main.1100.obb)",
+                "Cenários, texturas e áudio do jogo (~1.25 GB)",
+                1_250_000_000L),
         new DriveFile("patch.12222.com.gameloft.android.ANMP.GloftM4HM.obb",
-                "1uRyPR_w6oYSAXooIbF6Uye9joBCHhSaT"),
+                "1uRyPR_w6oYSAXooIbF6Uye9joBCHhSaT",
+                "Patch de Atualização (patch.12222.obb)",
+                "Modelos de alta fidelidade e correções (~310 MB)",
+                310_000_000L),
     };
 
     private static final long MIN_VALID_BYTES = 1_000_000L; // 1 MB
 
+    public static long getDownloadId(Context c, String fileName) {
+        return c.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE).getLong("dl_id_" + fileName, -1);
+    }
+
+    public static void setDownloadId(Context c, String fileName, long id) {
+        c.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE).edit().putLong("dl_id_" + fileName, id).apply();
+    }
+
+    public static void clearDownloadId(Context c, String fileName) {
+        c.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE).edit().remove("dl_id_" + fileName).apply();
+    }
+
     /** Pasta final onde o GameProcess lê. */
-    static File targetDir(Context c) {
+    public static File targetDir(Context c) {
         return Storage.mainDir(c);
     }
 
     /** Pasta onde o DownloadManager escreve (público e acessível sem permissão). */
-    private static File downloadStagingDir() {
+    public static File downloadStagingDir() {
         return Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
     }
 
     /** True quando o arquivo já está na pasta do jogo, completo. */
-    private static boolean haveTarget(Context c, DriveFile f) {
+    public static boolean haveTarget(Context c, DriveFile f) {
         File local = new File(targetDir(c), f.name);
         return local.exists() && local.length() >= MIN_VALID_BYTES;
     }
 
+    public static boolean haveTarget(Context c, int index) {
+        if (index < 0 || index >= FILES.length) return false;
+        return haveTarget(c, FILES[index]);
+    }
+
     /**
-     * Cancela e remove tarefas anteriores no DownloadManager com falha ou pendentes deste arquivo,
-     * para não haver conflito de nomes ou travamento no Android 14/15/16.
+     * Cancela e remove tarefas anteriores no DownloadManager com falha ou pendentes deste arquivo.
      */
-    private static void cancelExisting(Context c, String fileId) {
+    public static void cancelExisting(Context c, String fileName, String fileId) {
         DownloadManager dm = (DownloadManager) c.getSystemService(Context.DOWNLOAD_SERVICE);
         if (dm == null) return;
+        long savedId = getDownloadId(c, fileName);
+        if (savedId > 0) {
+            try { dm.remove(savedId); } catch (Exception ignored) {}
+            clearDownloadId(c, fileName);
+        }
         try (Cursor cur = dm.query(new DownloadManager.Query())) {
             if (cur != null) {
                 while (cur.moveToNext()) {
+                    int tIdx = cur.getColumnIndex(DownloadManager.COLUMN_TITLE);
+                    String title = tIdx >= 0 ? cur.getString(tIdx) : null;
                     int uIdx = cur.getColumnIndex(DownloadManager.COLUMN_URI);
-                    if (uIdx < 0) continue;
-                    String uri = cur.getString(uIdx);
-                    if (uri != null && uri.contains(fileId)) {
+                    String uri = uIdx >= 0 ? cur.getString(uIdx) : null;
+                    if ((title != null && title.equals(fileName)) || (uri != null && uri.contains(fileId))) {
                         int status = cur.getInt(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
-                        if (status == DownloadManager.STATUS_FAILED || status == DownloadManager.STATUS_PAUSED) {
+                        if (status == DownloadManager.STATUS_FAILED || status == DownloadManager.STATUS_PAUSED || status == DownloadManager.STATUS_RUNNING) {
                             long id = cur.getLong(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_ID));
-                            dm.remove(id);
-                            Log.i(TAG, "Removida tarefa anterior em falha/pausada: id=" + id);
+                            try { dm.remove(id); } catch (Exception ignored) {}
+                            Log.i(TAG, "Cancelada tarefa anterior: id=" + id + " para " + fileName);
                         }
                     }
                 }
@@ -98,8 +134,11 @@ public final class DriveDownloader {
         }
     }
 
-    /** Enfileira um download. Retorna o id, ou -1 quando o arquivo já existe ou falhou. */
-    private static long enqueue(Context c, DriveFile f) {
+    /** Enfileira um download individual. Retorna o ID gerado, ou -1 se já existe ou falhou. */
+    public static long enqueue(Context c, int index) {
+        if (index < 0 || index >= FILES.length) return -1;
+        DriveFile f = FILES[index];
+
         if (haveTarget(c, f)) {
             Log.i(TAG, "already have " + f.name);
             return -1;
@@ -112,34 +151,31 @@ public final class DriveDownloader {
                 Log.i(TAG, "already staged " + f.name + " (" + staged.length() + " bytes)");
                 return -1;
             } else {
-                // Arquivo parcial/corrompido: apaga para o DownloadManager não falhar
                 if (!staged.delete()) {
                     Log.w(TAG, "Não foi possível apagar staging incompleto antigo: " + staged);
                 }
             }
         }
 
-        cancelExisting(c, f.id);
+        cancelExisting(c, f.name, f.id);
 
         // Link direto do Google Drive com confirm=t para ignorar aviso de vírus e obter o binário
         Uri uri = Uri.parse("https://drive.usercontent.google.com/download?id=" + f.id + "&export=download&confirm=t");
 
         DownloadManager.Request req = new DownloadManager.Request(uri);
         req.setTitle(f.name);
-        req.setDescription("Baixando dados do Modern Combat 4");
+        req.setDescription("Modern Combat 4: " + f.title);
         req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
         req.setAllowedOverMetered(true);
         req.setAllowedOverRoaming(false);
         req.setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI | DownloadManager.Request.NETWORK_MOBILE);
 
-        // Header User-Agent para compatibilidade com CDN do Google Drive
         req.addRequestHeader("User-Agent", "Mozilla/5.0 (Linux; Android " + Build.VERSION.RELEASE + "; Mobile)");
 
-        // Destino na pasta pública de Downloads do sistema
         try {
             req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, f.name);
         } catch (IllegalStateException e) {
-            Log.w(TAG, "setDestinationInExternalPublicDir falhou: " + e.getMessage() + ", tentando prosseguir");
+            Log.w(TAG, "setDestinationInExternalPublicDir falhou: " + e.getMessage() + ", prosseguindo");
         }
 
         DownloadManager dm = (DownloadManager) c.getSystemService(Context.DOWNLOAD_SERVICE);
@@ -149,25 +185,50 @@ public final class DriveDownloader {
         }
         try {
             long id = dm.enqueue(req);
+            setDownloadId(c, f.name, id);
             Log.i(TAG, "queued " + f.name + " (" + f.id + ") -> id=" + id);
             return id;
-        } catch (SecurityException e) {
-            Log.e(TAG, "SecurityException enqueuing " + f.name + ": " + e);
-            return -1;
-        } catch (IllegalArgumentException e) {
-            Log.e(TAG, "IllegalArgumentException enqueuing " + f.name + ": " + e);
-            return -1;
         } catch (Exception e) {
-            Log.e(TAG, "General exception enqueuing " + f.name + ": " + e);
+            Log.e(TAG, "Exception enqueuing " + f.name + ": " + e);
             return -1;
         }
     }
 
-    /** Dispara o download dos arquivos que ainda faltam. */
-    public static void downloadAll(Activity a) {
+    /** Baixa um único arquivo individualmente. */
+    public static long downloadOne(Activity a, int index) {
+        if (index < 0 || index >= FILES.length) return -1;
+        DriveFile f = FILES[index];
+        if (haveTarget(a, f)) {
+            Toast.makeText(a, f.title + " já está instalado.", Toast.LENGTH_SHORT).show();
+            return -1;
+        }
+        long id = enqueue(a, index);
+        if (id > 0) {
+            Toast.makeText(a, "Iniciando download: " + f.title, Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(a, "Falha ao enfileirar: " + f.title, Toast.LENGTH_SHORT).show();
+        }
+        return id;
+    }
+
+    /** Cancela o download de um único arquivo. */
+    public static void cancelOne(Context c, int index) {
+        if (index < 0 || index >= FILES.length) return;
+        DriveFile f = FILES[index];
+        cancelExisting(c, f.name, f.id);
+        File staged = new File(downloadStagingDir(), f.name);
+        if (staged.exists()) staged.delete();
+        File tmp = new File(new File(targetDir(c), f.name).getPath() + ".part");
+        if (tmp.exists()) tmp.delete();
+        Toast.makeText(c, "Download cancelado: " + f.title, Toast.LENGTH_SHORT).show();
+    }
+
+    /** Dispara o download de todos os arquivos que ainda faltam. */
+    public static int downloadAll(Activity a) {
         int queued = 0;
-        for (DriveFile f : FILES) {
-            if (enqueue(a, f) >= 0) queued++;
+        for (int i = 0; i < FILES.length; i++) {
+            if (haveTarget(a, FILES[i])) continue;
+            if (enqueue(a, i) >= 0) queued++;
         }
         if (queued == 0) {
             Toast.makeText(a, "Todos os arquivos já estão prontos.", Toast.LENGTH_SHORT).show();
@@ -175,30 +236,7 @@ public final class DriveDownloader {
             Toast.makeText(a, queued + " download(s) iniciado(s). Acompanhe o progresso.",
                     Toast.LENGTH_LONG).show();
         }
-    }
-
-    /** Mostra a confirmação e dispara o download. */
-    public static void confirmAndDownload(Activity a) {
-        if (allPresent(a)) {
-            Toast.makeText(a, "Os arquivos já estão na pasta do jogo.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        if (!Storage.hasAccess(a)) {
-            new AlertDialog.Builder(a)
-                    .setTitle("Acesso a Todos os Arquivos")
-                    .setMessage("Para armazenar os dados do jogo (~1.5 GB) em BridgeGames, conceda a permissão de acesso aos arquivos.")
-                    .setPositiveButton("Permitir", (d, w) -> Storage.requestAccess(a, 2))
-                    .setNegativeButton("Cancelar", null)
-                    .show();
-            return;
-        }
-        new AlertDialog.Builder(a)
-                .setTitle("Baixar dados do jogo")
-                .setMessage("Vai baixar o APK e os OBBs (~1.5 GB) de uma pasta pública.\n\n"
-                        + "Recomendado estar no Wi-Fi. O download continua mesmo se você sair do app.")
-                .setPositiveButton("Baixar", (d, w) -> downloadAll(a))
-                .setNegativeButton("Cancelar", null)
-                .show();
+        return queued;
     }
 
     /** True quando todos os arquivos já estão na pasta final com tamanho plausível. */
@@ -222,7 +260,10 @@ public final class DriveDownloader {
 
     public static boolean moveIfFinished(Context c, String name, long downloadId, String localUriStr) {
         File target = new File(targetDir(c), name);
-        if (target.exists() && target.length() >= MIN_VALID_BYTES) return true;
+        if (target.exists() && target.length() >= MIN_VALID_BYTES) {
+            clearDownloadId(c, name);
+            return true;
+        }
 
         File parent = target.getParentFile();
         if (parent != null && !parent.exists() && !parent.mkdirs()) {
@@ -258,50 +299,46 @@ public final class DriveDownloader {
         // 2. Se falhar, tentar abrir via ContentResolver se houver localUri (content://...)
         if (!copied && localUriStr != null && localUriStr.startsWith("content://")) {
             try {
-                Uri uri = Uri.parse(localUriStr);
-                try (InputStream in = c.getContentResolver().openInputStream(uri)) {
+                Uri contentUri = Uri.parse(localUriStr);
+                try (InputStream in = c.getContentResolver().openInputStream(contentUri);
+                     OutputStream out = new FileOutputStream(tmp)) {
                     if (in != null) {
-                        try (OutputStream out = new FileOutputStream(tmp)) {
-                            byte[] buf = new byte[1 << 17];
-                            for (int r; (r = in.read(buf)) > 0; ) out.write(buf, 0, r);
-                            copied = true;
-                            Log.i(TAG, "Copiado via ContentResolver para " + name);
-                        }
+                        byte[] buf = new byte[1 << 17];
+                        for (int r; (r = in.read(buf)) > 0; ) out.write(buf, 0, r);
+                        copied = true;
+                        Log.i(TAG, "Copiado via ContentResolver para " + name);
                     }
                 }
             } catch (Exception e) {
-                Log.w(TAG, "ContentResolver falhou para " + localUriStr + ": " + e.getMessage());
+                Log.w(TAG, "openInputStream falhou para " + localUriStr + ": " + e.getMessage());
             }
         }
 
-        // 3. Fallback: tentar ler direto do sistema de arquivos em DIRECTORY_DOWNLOADS
+        // 3. Fallback: tentar ler direto do staging em Downloads/
         File staged = new File(downloadStagingDir(), name);
         if (!copied && staged.exists() && staged.length() >= MIN_VALID_BYTES) {
-            try {
-                Storage.copyFile(staged, tmp);
+            try (InputStream in = new FileInputStream(staged);
+                 OutputStream out = new FileOutputStream(tmp)) {
+                byte[] buf = new byte[1 << 17];
+                for (int r; (r = in.read(buf)) > 0; ) out.write(buf, 0, r);
                 copied = true;
-                Log.i(TAG, "Copiado via Storage.copyFile de staged para " + name);
+                Log.i(TAG, "Copiado de Downloads/ para " + name);
             } catch (Exception e) {
-                Log.e(TAG, "copyFile falhou de staged para " + name + ": " + e.getMessage());
+                Log.w(TAG, "Cópia direta falhou: " + e.getMessage());
             }
         }
 
-        if (!copied || tmp.length() < MIN_VALID_BYTES) {
+        if (!copied || !tmp.exists() || tmp.length() < MIN_VALID_BYTES) {
+            Log.e(TAG, "Falha na transferência de " + name + " (tamanho inválido)");
             if (tmp.exists()) tmp.delete();
             return false;
         }
 
-        // Renomear atomicamente de .part para o arquivo de destino final
-        if (target.exists() && !target.delete()) {
-            Log.w(TAG, "could not delete old target " + target);
-        }
         if (tmp.renameTo(target)) {
-            Log.i(TAG, "Mover finalizado: " + name + " -> " + target + " (" + target.length() + " bytes)");
-            // Limpa registro do DownloadManager para não duplicar espaço
+            Log.i(TAG, "Transferido com sucesso para BridgeGames: " + target.getPath() + " (" + target.length() + " bytes)");
+            clearDownloadId(c, name);
             if (downloadId > 0 && dm != null) {
-                try {
-                    dm.remove(downloadId);
-                } catch (Exception ignored) {}
+                try { dm.remove(downloadId); } catch (Exception ignored) {}
             }
             if (staged.exists()) {
                 staged.delete();
@@ -336,7 +373,7 @@ public final class DriveDownloader {
 
         public int percent() {
             if (bytesTotal <= 0) return 0;
-            return (int) Math.min(100, bytesDone * 100 / bytesTotal);
+            return (int) Math.min(100, Math.max(0, bytesDone * 100 / bytesTotal));
         }
 
         public boolean isDone() {
@@ -377,7 +414,7 @@ public final class DriveDownloader {
     }
 
     /**
-     * Consulta o DownloadManager para o estado atual dos arquivos.
+     * Consulta o estado atual dos arquivos com filtro direto por ID.
      * Retorna uma entrada por arquivo, na mesma ordem de FILES.
      */
     public static Progress[] snapshot(Context c) {
@@ -389,15 +426,16 @@ public final class DriveDownloader {
         for (int i = 0; i < FILES.length; i++) {
             DriveFile f = FILES[i];
 
-            // Já está na pasta final? Pronto.
+            // 1. Já está na pasta final? Pronto e verificado.
             File local = new File(target, f.name);
             if (local.exists() && local.length() >= MIN_VALID_BYTES) {
+                clearDownloadId(c, f.name);
                 out[i] = new Progress(-1, f.name, DownloadManager.STATUS_SUCCESSFUL, 0,
                         local.length(), local.length(), null);
                 continue;
             }
 
-            // Está no staging (Downloads) pronto? Marca como concluído (o poll move).
+            // 2. Está no staging (Downloads) pronto? Pronto para mover.
             File staged = new File(staging, f.name);
             if (staged.exists() && staged.length() >= MIN_VALID_BYTES) {
                 out[i] = new Progress(-1, f.name, DownloadManager.STATUS_SUCCESSFUL, 0,
@@ -405,41 +443,75 @@ public final class DriveDownloader {
                 continue;
             }
 
-            // Senão consulta o DownloadManager.
+            // 3. Consulta direta pelo DownloadId registrado
+            long savedId = getDownloadId(c, f.name);
             Progress result = null;
-            if (dm != null) {
+
+            if (savedId > 0 && dm != null) {
+                DownloadManager.Query q = new DownloadManager.Query().setFilterById(savedId);
+                try (Cursor cur = dm.query(q)) {
+                    if (cur != null && cur.moveToFirst()) {
+                        int status = cur.getInt(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+                        int reason = 0;
+                        int rIdx = cur.getColumnIndex(DownloadManager.COLUMN_REASON);
+                        if (rIdx >= 0) reason = cur.getInt(rIdx);
+
+                        long done  = cur.getLong(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+                        long total = cur.getLong(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+                        if (total <= 0) total = f.approxSize;
+
+                        String localUri = null;
+                        int lIdx = cur.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
+                        if (lIdx >= 0) localUri = cur.getString(lIdx);
+
+                        result = new Progress(savedId, f.name, status, reason, done, total, localUri);
+                    } else {
+                        // Id não existe mais no DM
+                        clearDownloadId(c, f.name);
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, "Erro ao consultar DM por ID " + savedId + ": " + e.getMessage());
+                }
+            }
+
+            // 4. Fallback caso não haja ID salvo: pesquisa por título
+            if (result == null && dm != null) {
                 DownloadManager.Query q = new DownloadManager.Query();
                 try (Cursor cur = dm.query(q)) {
                     if (cur != null) {
                         while (cur.moveToNext()) {
+                            int tIdx = cur.getColumnIndex(DownloadManager.COLUMN_TITLE);
+                            String title = tIdx >= 0 ? cur.getString(tIdx) : null;
                             int uIdx = cur.getColumnIndex(DownloadManager.COLUMN_URI);
-                            if (uIdx < 0) continue;
-                            String uri = cur.getString(uIdx);
-                            if (uri == null || !uri.contains(f.id)) continue;
+                            String uri = uIdx >= 0 ? cur.getString(uIdx) : null;
 
-                            long id = cur.getLong(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_ID));
-                            int status = cur.getInt(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+                            if ((title != null && title.equals(f.name)) || (uri != null && uri.contains(f.id))) {
+                                long id = cur.getLong(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_ID));
+                                int status = cur.getInt(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+                                int reason = 0;
+                                int rIdx = cur.getColumnIndex(DownloadManager.COLUMN_REASON);
+                                if (rIdx >= 0) reason = cur.getInt(rIdx);
 
-                            int reason = 0;
-                            int rIdx = cur.getColumnIndex(DownloadManager.COLUMN_REASON);
-                            if (rIdx >= 0) reason = cur.getInt(rIdx);
+                                long done  = cur.getLong(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
+                                long total = cur.getLong(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+                                if (total <= 0) total = f.approxSize;
 
-                            long done  = cur.getLong(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR));
-                            long total = cur.getLong(cur.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES));
+                                String localUri = null;
+                                int lIdx = cur.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
+                                if (lIdx >= 0) localUri = cur.getString(lIdx);
 
-                            String localUri = null;
-                            int lIdx = cur.getColumnIndex(DownloadManager.COLUMN_LOCAL_URI);
-                            if (lIdx >= 0) localUri = cur.getString(lIdx);
-
-                            result = new Progress(id, f.name, status, reason, done, total, localUri);
-                            break;
+                                setDownloadId(c, f.name, id);
+                                result = new Progress(id, f.name, status, reason, done, total, localUri);
+                                break;
+                            }
                         }
                     }
                 } catch (Exception e) {
-                    Log.w(TAG, "Erro ao consultar DM: " + e.getMessage());
+                    Log.w(TAG, "Erro no fallback DM: " + e.getMessage());
                 }
             }
-            out[i] = result != null ? result : new Progress(-1, f.name, 0, 0, 0, 0, null);
+
+            out[i] = result != null ? result : new Progress(-1, f.name, 0, 0, 0, f.approxSize, null);
         }
         return out;
     }
