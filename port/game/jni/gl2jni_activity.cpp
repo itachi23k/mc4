@@ -181,12 +181,14 @@ static void Lib_SwapBuffer(JNIEnv *env, jclass clazz)
 // ================== TECLADO (IME) ==================
 static char g_keyboard_text[256] = "";
 static bool g_keyboard_visible = false;
+static bool g_keyboard_confirmed = false;
 
 static void Lib_ShowKeyboard(JNIEnv *env, jclass c, jint type, jstring currentText, jint maxLength) {
     (void)c; (void)type;
     const char *cur = currentText ? ((String *)currentText)->str : "";
     snprintf(g_keyboard_text, sizeof(g_keyboard_text), "%s", cur);
     g_keyboard_visible = true;
+    g_keyboard_confirmed = false;
 
     // Salva a requisição na pasta ctl/ para o MainActivity ler e abrir o Gboard
     const char *ctrl_dir = getenv("MC4_CONTROL_DIR");
@@ -207,8 +209,10 @@ static jint Lib_IsKeyboardVisible(JNIEnv *env, jclass c) {
 
 static jbyteArray Lib_GetKeyboardText(JNIEnv *env, jclass c) {
     (void)c;
+    // Quando a engine lê o texto, ela considera o teclado fechado.
     g_keyboard_visible = false;
-    
+    g_keyboard_confirmed = false;
+
     // Deleta a requisição
     const char *ctrl_dir = getenv("MC4_CONTROL_DIR");
     char path[PATH_MAX];
@@ -217,15 +221,20 @@ static jbyteArray Lib_GetKeyboardText(JNIEnv *env, jclass c) {
 
     int len = strlen(g_keyboard_text);
     jbyteArray arr = env->NewByteArray(len);
-    env->SetByteArrayRegion(arr, 0, len, (const jbyte*)g_keyboard_text);
-    trace("keyboard: GetKeyboardText -> '%s'", g_keyboard_text);
+    if (len > 0) {
+        env->SetByteArrayRegion(arr, 0, len, (const jbyte*)g_keyboard_text);
+    }
+    trace("keyboard: GetKeyboardText -> '%s' (len %d)", g_keyboard_text, len);
     return arr;
 }
 
 extern "C" void mc4_update_keyboard_text(const char* text) {
     if (text) {
         snprintf(g_keyboard_text, sizeof(g_keyboard_text), "%s", text);
-        g_keyboard_visible = false; // Muda para falso para o jogo entender que confirmou
+        g_keyboard_confirmed = true;
+        // NÃO mudamos g_keyboard_visible aqui.
+        // A engine precisa ver que o teclado ainda está aberto para ler o texto.
+        trace("keyboard: confirmed text='%s', waiting for engine to consume", text);
     }
 }
 // ====================================================
