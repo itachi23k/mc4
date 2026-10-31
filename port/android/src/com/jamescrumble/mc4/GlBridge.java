@@ -226,7 +226,6 @@ final class GlBridge implements Runnable {
         if (!EGL14.eglInitialize(dpy, ver, 0, ver, 1)) throw new IllegalStateException("eglInitialize failed");
 
         int[][] wanted = {
-            { 10, 10, 10, 2, 24, 8 }, // RGB10_A2 (HDR) - adicionado
             { 8, 8, 8, 8, 24, 8 },
             { 8, 8, 8, 0, 24, 8 },
             { 8, 8, 8, 0, 16, 0 },
@@ -1005,54 +1004,78 @@ final class GlBridge implements Runnable {
 
     private void runPostProcess() {
         if (!ppEnabled) return;
+        try {
+            if (surfaceWidth == 0 || surfaceHeight == 0) {
+                int[] w = new int[1], h = new int[1];
+                EGL14.eglQuerySurface(dpy, window, EGL14.EGL_WIDTH, w, 0);
+                EGL14.eglQuerySurface(dpy, window, EGL14.EGL_HEIGHT, h, 0);
+                surfaceWidth = w[0];
+                surfaceHeight = h[0];
+            }
+            int w = surfaceWidth > 0 ? surfaceWidth : renderWidth;
+            int h = surfaceHeight > 0 ? surfaceHeight : renderHeight;
+            if (w <= 0 || h <= 0) return;
 
-        if (surfaceWidth == 0 || surfaceHeight == 0) {
-            int[] w = new int[1], h = new int[1];
-            EGL14.eglQuerySurface(dpy, window, EGL14.EGL_WIDTH, w, 0);
-            EGL14.eglQuerySurface(dpy, window, EGL14.EGL_HEIGHT, h, 0);
-            surfaceWidth = w[0];
-            surfaceHeight = h[0];
+            if (!ppReady || ppWidth != w || ppHeight != h) {
+                ensurePostProcess(w, h);
+                if (!ppReady) return;
+            }
+
+            // Salva estados do GL que vamos alterar para não quebrar a engine
+            int[] prevVao = new int[1], prevProg = new int[1], prevFbo = new int[1], prevTex = new int[1];
+            int[] prevVp = new int[4];
+            boolean depthWas = GLES30.glIsEnabled(GLES30.GL_DEPTH_TEST);
+            boolean blendWas = GLES30.glIsEnabled(GLES30.GL_BLEND);
+            boolean cullWas = GLES30.glIsEnabled(GLES30.GL_CULL_FACE);
+            boolean scissorWas = GLES30.glIsEnabled(GLES30.GL_SCISSOR_TEST);
+            GLES30.glGetIntegerv(GLES30.GL_VERTEX_ARRAY_BINDING, prevVao, 0);
+            GLES30.glGetIntegerv(GLES30.GL_CURRENT_PROGRAM, prevProg, 0);
+            GLES30.glGetIntegerv(GLES30.GL_FRAMEBUFFER_BINDING, prevFbo, 0);
+            GLES30.glGetIntegerv(GLES30.GL_TEXTURE_BINDING_2D, prevTex, 0);
+            GLES30.glGetIntegerv(GLES30.GL_VIEWPORT, prevVp, 0);
+
+            // Copia o backbuffer já renderizado pela engine para a nossa textura
+            GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, 0);
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, ppTex);
+            GLES30.glCopyTexSubImage2D(GLES30.GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
+
+            // Renderiza o quad aplicando Color Grading e Curvas de Tom
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
+            GLES30.glViewport(0, 0, w, h);
+            GLES30.glDisable(GLES30.GL_DEPTH_TEST);
+            GLES30.glDisable(GLES30.GL_STENCIL_TEST);
+            GLES30.glDisable(GLES30.GL_BLEND);
+            GLES30.glDisable(GLES30.GL_CULL_FACE);
+            GLES30.glDisable(GLES30.GL_SCISSOR_TEST);
+            GLES30.glColorMask(true, true, true, true);
+
+            GLES30.glUseProgram(ppProgram);
+            GLES30.glActiveTexture(GLES30.GL_TEXTURE0);
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, ppTex);
+            GLES30.glUniform1i(ppTexUniform, 0);
+            GLES30.glUniform2f(ppResUniform, (float) w, (float) h);
+            GLES30.glUniform1f(ppSatUniform, ppSaturation);
+            GLES30.glUniform1f(ppConUniform, ppContrast);
+            GLES30.glUniform1f(ppGamUniform, ppGamma);
+            GLES30.glUniform1f(ppShpUniform, ppSharpen);
+
+            GLES30.glBindVertexArray(ppVao);
+            GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 3);
+
+            // Restaura fielmente todos os estados originais da engine
+            GLES30.glBindVertexArray(prevVao[0]);
+            GLES30.glUseProgram(prevProg[0]);
+            GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, prevFbo[0]);
+            GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, prevTex[0]);
+            GLES30.glViewport(prevVp[0], prevVp[1], prevVp[2], prevVp[3]);
+            if (depthWas) GLES30.glEnable(GLES30.GL_DEPTH_TEST);
+            if (blendWas) GLES30.glEnable(GLES30.GL_BLEND);
+            if (cullWas) GLES30.glEnable(GLES30.GL_CULL_FACE);
+            if (scissorWas) GLES30.glEnable(GLES30.GL_SCISSOR_TEST);
+        } catch (Throwable t) {
+            log.log("pp error (desativando post-process): " + t);
+            ppEnabled = false;
         }
-        int w = surfaceWidth > 0 ? surfaceWidth : renderWidth;
-        int h = surfaceHeight > 0 ? surfaceHeight : renderHeight;
-        if (w <= 0 || h <= 0) return;
-
-        if (!ppReady || ppWidth != w || ppHeight != h) {
-            ensurePostProcess(w, h);
-            if (!ppReady) return;
-        }
-
-        // Copia o backbuffer já renderizado pela engine para a nossa textura
-        GLES30.glBindFramebuffer(GLES30.GL_READ_FRAMEBUFFER, 0);
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, ppTex);
-        GLES30.glCopyTexSubImage2D(GLES30.GL_TEXTURE_2D, 0, 0, 0, 0, 0, w, h);
-
-        // Renderiza o quad aplicando Color Grading e Curvas de Tom
-        GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0);
-        GLES30.glViewport(0, 0, w, h);
-        GLES30.glDisable(GLES30.GL_DEPTH_TEST);
-        GLES30.glDisable(GLES30.GL_STENCIL_TEST);
-        GLES30.glDisable(GLES30.GL_BLEND);
-        GLES30.glDisable(GLES30.GL_CULL_FACE);
-        GLES30.glDisable(GLES30.GL_SCISSOR_TEST);
-        GLES30.glColorMask(true, true, true, true);
-
-        GLES30.glUseProgram(ppProgram);
-        GLES30.glActiveTexture(GLES30.GL_TEXTURE0);
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, ppTex);
-        GLES30.glUniform1i(ppTexUniform, 0);
-        GLES30.glUniform2f(ppResUniform, (float) w, (float) h);
-        GLES30.glUniform1f(ppSatUniform, ppSaturation);
-        GLES30.glUniform1f(ppConUniform, ppContrast);
-        GLES30.glUniform1f(ppGamUniform, ppGamma);
-        GLES30.glUniform1f(ppShpUniform, ppSharpen);
-
-        GLES30.glBindVertexArray(ppVao);
-        GLES30.glDrawArrays(GLES30.GL_TRIANGLES, 0, 3);
-        GLES30.glBindVertexArray(0);
-
-        GLES30.glBindTexture(GLES30.GL_TEXTURE_2D, 0);
-        GLES30.glUseProgram(0);
     }
 
 
